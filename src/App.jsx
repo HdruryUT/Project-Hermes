@@ -11,10 +11,12 @@ import RaceDayTab from "./components/RaceDayTab.jsx";
 import GearTab from "./components/GearTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
 import FuelCalcTab from "./components/FuelCalcTab.jsx";
-import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet } from "./components/icons.jsx";
+import HalfMarathonTab from "./components/HalfMarathonTab.jsx";
+import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet, IconDownhill } from "./components/icons.jsx";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: IconHome },
+  { id: "halfmarathon", label: "Half Marathon", Icon: IconDownhill },
   { id: "schedule", label: "Schedule", Icon: IconCalendar },
   { id: "eating", label: "Eating", Icon: IconEating },
   { id: "fuel", label: "Fuel Calc", Icon: IconDroplet },
@@ -91,6 +93,7 @@ export default function App() {
       </nav>
 
       {tab === "dashboard" && <DashboardTab zones={zones} goToTab={setTab} />}
+      {tab === "halfmarathon" && <HalfMarathonTab zones={zones} />}
       {tab === "schedule" && <ScheduleTab zones={zones} />}
       {tab === "eating" && <EatingTab />}
       {tab === "fuel" && <FuelCalcTab zones={zones} />}

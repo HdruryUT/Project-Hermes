@@ -93,3 +93,12 @@ export function IconDroplet({ size = 18 }) {
     </Svg>
   );
 }
+
+export function IconDownhill({ size = 18 }) {
+  return (
+    <Svg size={size}>
+      <path d="M3 18 11 6l3 4 2-2.5L21 18" />
+      <path d="M14 15l3-3 2 2" />
+    </Svg>
+  );
+}
