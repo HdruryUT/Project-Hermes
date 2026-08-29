@@ -64,6 +64,47 @@ export const PREP_CHECKLIST = [
   },
 ];
 
+// Downhill pace adjustments — conservative, clearly-estimated ranges, not physics.
+// Front section is steeper (more free speed) but also where braking/technique caps
+// the gain; back section is gentler grade but legs are already fatigued by then,
+// so its adjustment is smaller too despite being "easier" terrain.
+export const SEGMENTS = [
+  {
+    label: "Miles 1–6.9",
+    note: "Steep section, ~6.1% avg grade",
+    distance: 6.9,
+    adjustLo: 0.04, // faster bound uses the larger % below
+    adjustHi: 0.06,
+  },
+  {
+    label: "Miles 6.9–13.1",
+    note: "Final 10K, ~3.2% avg grade — legs already tired",
+    distance: 6.2,
+    adjustLo: 0.02,
+    adjustHi: 0.04,
+  },
+];
+
+// basePaceSecPerMile: flat-effort goal pace (e.g. midpoint of the Goal Half Marathon zone).
+export function computeTargetSplits(basePaceSecPerMile) {
+  if (!basePaceSecPerMile) return null;
+  const segments = SEGMENTS.map((seg) => {
+    const paceFast = basePaceSecPerMile * (1 - seg.adjustHi); // larger % cut = faster pace
+    const paceSlow = basePaceSecPerMile * (1 - seg.adjustLo);
+    return {
+      ...seg,
+      paceLo: paceFast,
+      paceHi: paceSlow,
+      timeLo: paceFast * seg.distance,
+      timeHi: paceSlow * seg.distance,
+    };
+  });
+  const totalTimeLo = segments.reduce((s, x) => s + x.timeLo, 0);
+  const totalTimeHi = segments.reduce((s, x) => s + x.timeHi, 0);
+  const flatTime = basePaceSecPerMile * RACE_INFO.distance;
+  return { segments, totalTimeLo, totalTimeHi, flatTime };
+}
+
 export const COURSE_STRATEGY = [
   {
     title: "The grade isn't even — front is much steeper than back",

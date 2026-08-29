@@ -1,7 +1,11 @@
-import { RACE_INFO, MORNING_TIMELINE, PREP_CHECKLIST, COURSE_STRATEGY } from "../data/halfMarathonRace.js";
+import { RACE_INFO, MORNING_TIMELINE, PREP_CHECKLIST, COURSE_STRATEGY, computeTargetSplits } from "../data/halfMarathonRace.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
-import { zonePace } from "../utils/paces.js";
+import { zonePace, fmtPace, fmtDuration } from "../utils/paces.js";
 import elevationImg from "../assets/half-marathon-elevation.webp";
+
+function fmtMinutes(sec) {
+  return Math.round(sec / 60);
+}
 
 export default function HalfMarathonTab({ zones }) {
   const [checked, setChecked] = useLocalStorage("orca.halfMarathonChecklist", {});
@@ -9,6 +13,8 @@ export default function HalfMarathonTab({ zones }) {
   const doneCount = allItems.filter((k) => checked[k]).length;
   const toggle = (key) => setChecked((c) => ({ ...c, [key]: !c[key] }));
   const goalPace = zonePace(zones, "halfmarathon");
+  const basePace = goalPace ? (goalPace.lo + goalPace.hi) / 2 : null;
+  const splits = computeTargetSplits(basePace);
 
   return (
     <div>
@@ -80,6 +86,40 @@ export default function HalfMarathonTab({ zones }) {
       <div className="card">
         <h2>Course &amp; Pacing Strategy</h2>
         <div className="sub">Read from the elevation chart's own numbers — the grade is not evenly distributed.</div>
+
+        {splits ? (
+          <>
+            <table className="grid" style={{ marginBottom: 4 }}>
+              <tbody>
+                {splits.segments.map((s) => (
+                  <tr key={s.label}>
+                    <td style={{ width: "26%" }}>
+                      <b>{s.label}</b>
+                      <div className="muted" style={{ fontSize: 12 }}>{s.note}</div>
+                    </td>
+                    <td>
+                      <b>{fmtPace(s.paceLo)}–{fmtPace(s.paceHi)}/mi</b>
+                      <div className="muted" style={{ fontSize: 13 }}>~{fmtMinutes(s.timeLo)}–{fmtMinutes(s.timeHi)} min for this segment</div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="banner info" style={{ marginTop: 4 }}>
+              Projected finish: <b>{fmtDuration(splits.totalTimeLo)}–{fmtDuration(splits.totalTimeHi)}</b>
+              <span className="muted"> · vs ~{fmtDuration(splits.flatTime)} if this were a flat course</span>
+            </div>
+            <div className="hint" style={{ fontSize: 12, color: "var(--muted)", marginTop: 6, marginBottom: 10 }}>
+              Rough targets from typical downhill pace adjustments, not a guarantee — everyone's downhill running
+              efficiency differs. Use these as a sanity check, not a number to chase.
+            </div>
+          </>
+        ) : (
+          <div className="banner warn" style={{ marginBottom: 10 }}>
+            Set your paces in Paces &amp; Strava to see personalized target splits for this course.
+          </div>
+        )}
+
         {COURSE_STRATEGY.map((s) => (
           <div key={s.title} style={{ marginBottom: 14 }}>
             <div className="section-title" style={{ marginTop: 0, marginBottom: 4 }}>{s.title}</div>
