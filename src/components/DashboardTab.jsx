@@ -25,6 +25,7 @@ export default function DashboardTab({ zones, goToTab }) {
   const todayZoneKey = zoneForWorkout(today.type);
   const todayPace = todayZoneKey ? zonePace(zones, todayZoneKey) : null;
   const isRest = today.type === "rest" || today.type === "xt";
+  const isStrength = today.type === "strength";
 
   return (
     <div>
@@ -67,6 +68,11 @@ export default function DashboardTab({ zones, goToTab }) {
         <div className="today-workout">{today.label}</div>
         {isRest ? (
           <div className="today-note">Rest is training too — this is when your body adapts. Take it easy.</div>
+        ) : isStrength ? (
+          <div className="today-note">
+            Strength day — check the Strength tab for today's session.{" "}
+            <button className="btn small" onClick={() => goToTab("strength")}>Open Strength</button>
+          </div>
         ) : todayPace ? (
           <div className="today-pace">
             Target pace <b>{todayPace.text}/mi</b> <span className="muted">({todayPace.label})</span>

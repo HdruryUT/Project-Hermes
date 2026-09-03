@@ -94,11 +94,12 @@ export function IconDroplet({ size = 18 }) {
   );
 }
 
-export function IconDownhill({ size = 18 }) {
+export function IconDumbbell({ size = 18 }) {
   return (
     <Svg size={size}>
-      <path d="M3 18 11 6l3 4 2-2.5L21 18" />
-      <path d="M14 15l3-3 2 2" />
+      <path d="M4 10v4M2.5 9.5v5M6.5 8v8" />
+      <path d="M20 10v4M21.5 9.5v5M17.5 8v8" />
+      <path d="M6.5 12h11" />
     </Svg>
   );
 }

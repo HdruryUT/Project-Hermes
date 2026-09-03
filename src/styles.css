@@ -1,37 +1,37 @@
 :root {
-  --navy: #0f2f52;
-  --blue: #2f80ed;     /* primary accent (was green) */
-  --blue2: #2167c9;
+  --navy: #3d1810;
+  --blue: #9c6b0a;     /* primary accent — Hermes gold */
+  --blue2: #8a5a00;
   --orange: #ef6c4d;   /* energy / race pop */
   --amber: #f4b740;    /* progress + cutback/taper */
 
-  --bg: #f3f6fa;
+  --bg: #faf6ed;
   --card: #ffffff;
-  --card2: #f7f9fc;
-  --line: #e4e9f0;
-  --text: #1f2d3d;
-  --muted: #66788c;
-  --ink: #123a63;     /* accent heading text */
-  --solid: #123a63;   /* solid brand bg (white text) */
-  --shadow: 0 1px 2px rgba(18, 40, 70, 0.06), 0 6px 16px rgba(18, 40, 70, 0.06);
-  --header: linear-gradient(135deg, #123a63, #1c5aa0);
+  --card2: #fcf9f1;
+  --line: #ede3d0;
+  --text: #2b1f14;
+  --muted: #7d6d57;
+  --ink: #5c2a1a;      /* accent heading text — deep maroon/bronze */
+  --solid: #5c2a1a;    /* solid brand bg (white text) */
+  --shadow: 0 1px 2px rgba(74, 31, 18, 0.06), 0 6px 16px rgba(74, 31, 18, 0.06);
+  --header: linear-gradient(135deg, #3d1810, #6b3410);
 }
 
 [data-theme="dark"] {
-  --blue: #5aa0f2;
-  --blue2: #4a8fe6;
+  --blue: #d9a73c;
+  --blue2: #c99530;
   --amber: #f6c25a;
 
-  --bg: #0d131b;
-  --card: #161f2b;
-  --card2: #1d2836;
-  --line: #283647;
-  --text: #e7edf5;
-  --muted: #90a2b6;
-  --ink: #bcd6f2;
-  --solid: #2c5f9e;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 8px 20px rgba(0, 0, 0, 0.32);
-  --header: linear-gradient(135deg, #0f2740, #163f6e);
+  --bg: #0a0a0a;
+  --card: #131313;
+  --card2: #191919;
+  --line: #8a6a2a;      /* gold outline, not a background tint */
+  --text: #f0e6d6;
+  --muted: #b8a588;
+  --ink: #f0d0a0;
+  --solid: #7a5a22;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 8px 20px rgba(0, 0, 0, 0.5);
+  --header: linear-gradient(135deg, #000000, #1a1408);
 }
 
 * { box-sizing: border-box; }
@@ -58,7 +58,8 @@ body {
 }
 .header-top { display: flex; align-items: flex-start; justify-content: space-between; }
 .brand { display: flex; align-items: center; gap: 13px; }
-.brand svg, .brand img { border-radius: 50%; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); flex-shrink: 0; }
+.brand svg { border-radius: 50%; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); flex-shrink: 0; }
+.brand img { flex-shrink: 0; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.35)); }
 .header h1 { margin: 0; font-size: 23px; letter-spacing: 0.2px; font-weight: 800; }
 .tagline { font-size: 13px; opacity: 0.85; margin-top: 2px; }
 .theme-toggle {
@@ -157,8 +158,9 @@ body {
 .day .wk-label { font-size: 13px; font-weight: 600; margin-top: 5px; line-height: 1.25; color: var(--text); }
 .day .wk-pace { font-size: 12px; color: var(--blue); margin-top: 6px; font-weight: 600; }
 .day.rest .wk-label { color: var(--muted); font-weight: 500; }
-.day.long { background: rgba(47, 128, 237, 0.09); }
+.day.long { background: rgba(156, 107, 10, 0.09); }
 .day.race, .day.halfmarathon { background: rgba(239, 108, 77, 0.12); }
+.day.strength { background: rgba(244, 183, 64, 0.14); }
 .days.mini { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
 .days.mini .day { min-height: 76px; }
 .day.is-today { box-shadow: inset 0 0 0 2px var(--blue); border-radius: 4px; }
@@ -213,7 +215,7 @@ table.grid td.when { font-weight: 700; color: var(--ink); white-space: nowrap; }
 .zone .z-unit { font-size: 12px; color: var(--muted); }
 
 .banner { border-radius: 10px; padding: 12px 14px; font-size: 13px; margin-bottom: 14px; }
-.banner.info { background: rgba(47, 128, 237, 0.12); color: var(--blue2); }
+.banner.info { background: rgba(156, 107, 10, 0.12); color: var(--blue2); }
 .banner.warn { background: rgba(239, 108, 77, 0.14); color: #c65a3d; }
 .banner.strava { background: rgba(239, 108, 77, 0.10); color: #c25a3c; border: 1px solid rgba(239, 108, 77, 0.28); }
 

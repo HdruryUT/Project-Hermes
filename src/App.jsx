@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { RACE_DATE } from "./data/plan.js";
 import { computeZones } from "./utils/paces.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
-import OrcaLogo from "./components/OrcaLogo.jsx";
+import HermesLogo from "./components/HermesLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
 import ScheduleTab from "./components/ScheduleTab.jsx";
 import EatingTab from "./components/EatingTab.jsx";
@@ -11,13 +11,13 @@ import RaceDayTab from "./components/RaceDayTab.jsx";
 import GearTab from "./components/GearTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
 import FuelCalcTab from "./components/FuelCalcTab.jsx";
-import HalfMarathonTab from "./components/HalfMarathonTab.jsx";
-import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet, IconDownhill } from "./components/icons.jsx";
+import StrengthTab from "./components/StrengthTab.jsx";
+import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet, IconDumbbell } from "./components/icons.jsx";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: IconHome },
-  { id: "halfmarathon", label: "Half Marathon", Icon: IconDownhill },
   { id: "schedule", label: "Schedule", Icon: IconCalendar },
+  { id: "strength", label: "Strength", Icon: IconDumbbell },
   { id: "eating", label: "Eating", Icon: IconEating },
   { id: "fuel", label: "Fuel Calc", Icon: IconDroplet },
   { id: "grocery", label: "Grocery", Icon: IconGrocery },
@@ -58,9 +58,9 @@ export default function App() {
       <header className="header">
         <div className="header-top">
           <div className="brand">
-            <OrcaLogo size={46} />
+            <HermesLogo size={46} />
             <div>
-              <h1>Project Orca</h1>
+              <h1>Project Hermes</h1>
               <div className="tagline">Marathon training companion</div>
             </div>
           </div>
@@ -93,8 +93,8 @@ export default function App() {
       </nav>
 
       {tab === "dashboard" && <DashboardTab zones={zones} goToTab={setTab} />}
-      {tab === "halfmarathon" && <HalfMarathonTab zones={zones} />}
       {tab === "schedule" && <ScheduleTab zones={zones} />}
+      {tab === "strength" && <StrengthTab />}
       {tab === "eating" && <EatingTab />}
       {tab === "fuel" && <FuelCalcTab zones={zones} />}
       {tab === "grocery" && <GroceryTab />}
@@ -102,7 +102,7 @@ export default function App() {
       {tab === "gear" && <GearTab />}
       {tab === "paces" && <SettingsTab effort={effort} onSetEffort={setEffort} />}
 
-      <div className="footer">Project Orca · local training companion · your data stays in this browser</div>
+      <div className="footer">Project Hermes · local training companion · your data stays in this browser</div>
     </div>
   );
 }

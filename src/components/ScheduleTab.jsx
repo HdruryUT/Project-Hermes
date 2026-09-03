@@ -25,7 +25,7 @@ export default function ScheduleTab({ zones }) {
       <div className="card">
         <h2>Training Schedule</h2>
         <div className="sub">
-          10 weeks, 5 running days each. Long runs climb from 10 to 20 miles, then a two-week taper into race day.
+          10 weeks, strength twice a week, long runs climbing from 10 to 20 miles, then a taper into race day.
           {zones
             ? " Paces below are personalized from your recent runs."
             : " Connect Strava or enter a recent run in the Paces tab to see personalized target paces."}
@@ -33,6 +33,7 @@ export default function ScheduleTab({ zones }) {
         <div className="legend">
           <span><span className="dot" style={{ background: "var(--blue)" }} />Long run</span>
           <span><span className="dot" style={{ background: "var(--orange)" }} />Race</span>
+          <span><span className="dot" style={{ background: "var(--amber)" }} />Strength</span>
           <span>Strides = 4–6 × 20-sec smooth pickups · XT = bike/swim/elliptical</span>
         </div>
       </div>

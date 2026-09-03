@@ -1,9 +1,9 @@
-# Project Orca — Marathon Training App
+# Project Hermes — Marathon Training App
 
-A local React app for your October 10, 2026 marathon. Tabs: **Dashboard, Schedule, Eating,
-Grocery, Race Day, Gear,** and **Paces & Strava**. It personalizes every workout's target
-pace from a recent run — pulled from Strava or entered by hand — and includes a light/dark
-theme and an at-a-glance dashboard.
+A local React app for your October 10, 2026 marathon. Tabs: **Dashboard, Schedule, Strength,
+Eating, Fuel Calc, Grocery, Race Day, Gear,** and **Paces & Strava**. It personalizes every
+workout's target pace from a recent run — pulled from Strava or entered by hand — and
+includes a light/dark theme and an at-a-glance dashboard.
 
 ---
 
@@ -49,7 +49,7 @@ wired up. To turn it on:
 
 1. **Register a Strava API application** at <https://www.strava.com/settings/api>.
    - **Authorization Callback Domain**: your Vercel domain with no `https://` or path —
-     e.g. `project-orca.vercel.app`, or your custom domain if you set one.
+     e.g. `project-hermes.vercel.app`, or your custom domain if you set one.
    - Note the **Client ID** and **Client Secret** it gives you.
 2. **Add environment variables in Vercel** — Project → Settings → Environment Variables:
    - `STRAVA_CLIENT_ID` — the Client ID from step 1.
@@ -86,17 +86,19 @@ api/                      Vercel serverless functions (only live once deployed)
 src/
 ├─ main.jsx
 ├─ App.jsx                tab shell, dark-mode toggle, countdown, pace state
-├─ styles.css             ocean theme + dark mode (CSS variables)
+├─ styles.css             Hermes gold/bronze theme + dark mode (CSS variables)
 ├─ data/
 │  ├─ plan.js             the 10-week schedule + phase colors
+│  ├─ strength.js         Monday/Friday strength sessions for runners
 │  └─ nutrition.js        eating schedule (evening runner), grocery, race-day, gear, race pacing plan
 ├─ utils/
 │  ├─ paces.js            Riegel predictor + training-pace zones
+│  ├─ fuel.js             carb/fluid/sodium estimator for long runs
 │  └─ schedule.js         "where am I in the plan today" helper
 ├─ services/strava.js     Strava fetch (manual token + connect-once backend) + demo data
 ├─ hooks/useLocalStorage.js
 └─ components/
-   ├─ OrcaLogo.jsx        inline SVG orca mark
+   ├─ HermesLogo.jsx      winged Hermes mark
    ├─ DashboardTab.jsx    home: countdown, today, this week, progress, paces
    └─ …Tab.jsx            one file per tab
 ```
