@@ -57,6 +57,34 @@ export const GROCERY = [
   { group: "Snacks & pantry", items: ["Granola / trail mix", "Rice cakes", "Whole-grain crackers", "Honey & maple syrup", "Dark chocolate", "Coffee / tea"] },
 ];
 
+export const COURSE = {
+  name: "Boulder, UT → Escalante, UT",
+  distance: 26.2,
+  ascent: 3270,
+  descent: 3940,
+  netDrop: 670,
+  netGradePct: 0.48,
+  maxElev: 6778,
+  minElev: 5181,
+  expectedTime: "3:10–3:13",
+  expectedTimeMid: "3:12",
+  flatEquivalent: "3:08–3:09",
+  profile: [
+    { miles: "0–2", grade: "+2.9%", note: "Gentle climb out of Boulder." },
+    { miles: "2–8", grade: "−1.5%", note: "Rolling terrain, mild net decline." },
+    { miles: "8–12", grade: "−5.0%", note: "Steep descent — the fastest stretch on paper. Run it controlled, not aggressive." },
+    { miles: "12–17", grade: "+4.0%", note: "Sustained climb right after the descent, on already-tired legs. This is the section that decides your day." },
+    { miles: "17–26", grade: "−1.0%", note: "Gentle rolling decline to the finish." },
+  ],
+  pacingNotes: [
+    "Net elevation change is only −670 ft (≈0.48% average grade) — despite the profile, this is not a fast downhill course.",
+    "The miles 8–12 descent and the miles 12–17 climb largely cancel out: time banked bombing the downhill gets paid back, with interest, on the climb right after it.",
+    "Run the descent controlled — save your quads for the climb at mile 12, not the other way around.",
+    "Pace by effort, not by GPS pace: slowing on miles 12–17 is correct and expected, not a sign anything's wrong.",
+    "You're already elevation-acclimatized (Orem sits ~4,500+ ft) — the 6,778 ft high point shouldn't be a major factor on its own.",
+  ],
+};
+
 export const RACE_DAY = [
   {
     section: "Carb-load — Thu Oct 8 → Sat Oct 10",
