@@ -106,6 +106,8 @@ body {
 .stat .big .of { font-size: 15px; color: var(--muted); font-weight: 600; margin-left: 2px; }
 .stat.accent-orange { border-top: 3px solid var(--orange); }
 .stat.accent-orange .big { color: var(--orange); }
+[data-theme="dark"] .stat.accent-orange { border-top-color: #b8bec7; }
+[data-theme="dark"] .stat.accent-orange .big { color: #b8bec7; }
 .stat.accent-teal { border-top: 3px solid var(--blue); }
 
 .today-card { border-left: 5px solid var(--blue); }
