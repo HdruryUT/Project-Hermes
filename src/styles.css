@@ -104,8 +104,8 @@ body {
 .stat .big { font-size: 34px; font-weight: 800; color: var(--ink); line-height: 1.05; margin: 3px 0; }
 .stat .big.small { font-size: 23px; }
 .stat .big .of { font-size: 15px; color: var(--muted); font-weight: 600; margin-left: 2px; }
-.stat.accent-orange { border-top: 3px solid var(--orange); }
-.stat.accent-orange .big { color: var(--orange); }
+.stat.accent-orange { border-top: 3px solid #8c6239; }
+.stat.accent-orange .big { color: #8c6239; }
 [data-theme="dark"] .stat.accent-orange { border-top-color: #b8bec7; }
 [data-theme="dark"] .stat.accent-orange .big { color: #b8bec7; }
 .stat.accent-teal { border-top: 3px solid var(--blue); }
@@ -222,6 +222,7 @@ table.grid td.when { font-weight: 700; color: var(--ink); white-space: nowrap; }
 .banner.strava { background: rgba(239, 108, 77, 0.10); color: #c25a3c; border: 1px solid rgba(239, 108, 77, 0.28); }
 
 .callout { border-left: 4px solid var(--orange); padding: 10px 14px; background: rgba(239, 108, 77, 0.07); border-radius: 0 8px 8px 0; font-size: 13px; color: var(--text); }
+.callout.silver { border-left-color: #8c6239; background: rgba(140, 98, 57, 0.07); }
 [data-theme="dark"] .callout.silver { border-left-color: #b8bec7; background: rgba(184, 190, 199, 0.08); }
 .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin-top: 8px; }
 .footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 24px; }
