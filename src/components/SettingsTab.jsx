@@ -17,10 +17,10 @@ export default function SettingsTab({ effort, onSetEffort }) {
 
   const [presetIdx, setPresetIdx] = useState(3); // half marathon
   const [customMiles, setCustomMiles] = useState("");
-  // Prefilled with a downhill-adjusted equivalent of the Aug 29 half (raw 1:22:30 on a
+  // Prefilled with a downhill-adjusted equivalent of the Aug 29 half (raw 1:22:00 on a
   // course averaging ~6.1% grade for the front 6.9 mi, ~3.2% for the final 10K — see
   // the Half Marathon strategy math). Edit freely if you'd rather use the raw time.
-  const [timeStr, setTimeStr] = useState("1:26:00");
+  const [timeStr, setTimeStr] = useState("1:25:30");
 
   const zones = computeZones(effort);
 
@@ -183,10 +183,10 @@ export default function SettingsTab({ effort, onSetEffort }) {
           <label>Time (h:mm:ss or mm:ss)</label>
           <input className="input" value={timeStr} onChange={(e) => setTimeStr(e.target.value)} placeholder="e.g. 1:45:00" />
           <div className="hint">
-            Prefilled at 1:26:00 — your raw Aug 29 half was 1:22:30, but that course was steeply downhill
-            (~6.1% grade for the first 6.9 mi, ~3.2% for the final 10K). 1:26:00 backs out roughly what that
+            Prefilled at 1:25:30 — your raw Aug 29 half was 1:22:00, but that course was steeply downhill
+            (~6.1% grade for the first 6.9 mi, ~3.2% for the final 10K). 1:25:30 backs out roughly what that
             effort would predict on a flat course, so your marathon prediction isn't inflated by the grade.
-            Use the raw 1:22:30 instead if you'd rather run more aggressive paces.
+            Use the raw 1:22:00 instead if you'd rather run more aggressive paces.
           </div>
         </div>
         <button className="btn" onClick={applyManual}>Set paces from this run</button>
