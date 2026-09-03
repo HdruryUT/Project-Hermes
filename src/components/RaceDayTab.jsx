@@ -28,7 +28,7 @@ export default function RaceDayTab() {
             ))}
           </tbody>
         </table>
-        <div className="callout" style={{ marginTop: 16 }}>{RACE_PACING.summary}</div>
+        <div className="callout silver" style={{ marginTop: 16 }}>{RACE_PACING.summary}</div>
       </div>
 
       <div className="card">
@@ -49,7 +49,7 @@ export default function RaceDayTab() {
             </table>
           </div>
         ))}
-        <div className="callout" style={{ marginTop: 16 }}>
+        <div className="callout silver" style={{ marginTop: 16 }}>
           Rehearse it: practice this exact fueling — pre-run snack, gels, drink — on your long runs so race day has
           zero surprises. Your gut can be trained just like your legs.
         </div>
