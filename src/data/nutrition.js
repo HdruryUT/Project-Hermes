@@ -94,18 +94,20 @@ export const RACE_DAY = [
 
 export const RACE_PACING = {
   intro:
-    "Here's the 7:20/mile target applied to each section — good news is the course profile is well-suited to a " +
-    "slightly negative-ish split around a big midrace slowdown:",
+    "Updated after the Aug 29 tune-up half (raw 1:22:00, ~1:25:30 flat-course-equivalent once the downhill grade " +
+    "is backed out) — Riegel now predicts a flat marathon goal of about 6:48/mile instead of the earlier 7:20. " +
+    "Here's that new pace applied to each section — the course profile is still well-suited to a slightly " +
+    "negative-ish split around the midrace climb:",
   sections: [
     {
       range: "Miles 1–11",
       terrain: "net downhill, ~1000 ft loss",
-      note: "Hold 7:05–7:15/mile. Slightly faster than goal pace is fine here since gravity's helping, but don't dip into 6:40s chasing the downhill — you'll pay for it on the climb.",
+      note: "Hold 6:33–6:43/mile. Slightly faster than goal pace is fine here since gravity's helping, but don't dip into 6:10s chasing the downhill — you'll pay for it on the climb.",
     },
     {
       range: "Miles 11–17",
       terrain: "sustained climb, ~900 ft gain",
-      note: "Plan on 7:50–8:15/mile, maybe touching 8:20 on the steepest stretch. That's 30–55 sec/mile slower than goal — expected and fine. Trying to hold 7:20 here is the classic way to blow up this course.",
+      note: "Plan on 7:18–7:43/mile, maybe touching 7:58 on the steepest stretch. That's 30–55 sec/mile slower than goal — expected and fine. Trying to hold 6:48 here is the classic way to blow up this course.",
     },
     {
       range: "Hogsback / exposed rock spine",
@@ -115,13 +117,15 @@ export const RACE_PACING = {
     {
       range: "Miles 17–26.2",
       terrain: "net downhill, rolling",
-      note: "Target 7:10–7:20/mile. Legs will be tired from the climb, so this isn't a place to hammer sub-7:00s to \"make up time\" — just hold goal pace or slightly under.",
+      note: "Target 6:38–6:48/mile. Legs will be tired from the climb, so this isn't a place to hammer sub-6:30s to \"make up time\" — just hold goal pace or slightly under.",
     },
   ],
   summary:
-    "Rough math: if you run the first 11 at ~7:10, the climb (6 miles) at ~8:00, and the final 9.2 at ~7:15, you " +
-    "land right around 3:12–3:13 total — close to a flat 7:20 average, just distributed to match the terrain " +
-    "instead of forcing even splits.",
+    "Rough math: if you run the first 11 at ~6:38, the climb (6 miles) at ~7:30, and the final 9.2 at ~6:43, you " +
+    "land right around 2:58–3:00 total — close to the new flat 6:48 average, just distributed to match the " +
+    "terrain instead of forcing even splits. This is a meaningfully faster goal than before, riding on one " +
+    "strong tune-up result and a Riegel extrapolation from half to full distance — treat it as a stretch goal " +
+    "and stay open to backing off toward the old ~7:20 pace if the climb or late miles aren't cooperating.",
 };
 
 export const GEAR = [
