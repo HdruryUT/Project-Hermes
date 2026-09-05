@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { weeklyMiles } from "../data/plan.js";
 
 // Hand-rolled inline-SVG bar chart — emphasis form: one hue (the current week) +
@@ -16,8 +16,28 @@ function niceMax(raw) {
   return Math.max(10, Math.ceil(raw / 10) * 10);
 }
 
-export default function MileageChart({ plan, activeWeekIndex = null }) {
+// Catmull-Rom-ish smoothing through a series of points — gives the gentle curve of a
+// typical activity-tracker chart instead of sharp straight-line segments.
+function smoothPath(points) {
+  if (points.length < 2) return "";
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? i : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
+export default function MileageChart({ plan, activeWeekIndex = null, actual = null }) {
   const [hover, setHover] = useState(null);
+  const gradientId = useId();
 
   const weeks = plan.map((w) => ({
     week: w.week,
@@ -29,20 +49,33 @@ export default function MileageChart({ plan, activeWeekIndex = null }) {
   const plotW = VW - PAD.left - PAD.right;
   const plotH = VH - PAD.top - PAD.bottom;
   const baselineY = PAD.top + plotH;
-  const max = niceMax(Math.max(...weeks.map((w) => w.miles)));
+  const actualValues = (actual || []).filter((v) => v != null);
+  const max = niceMax(Math.max(...weeks.map((w) => w.miles), ...actualValues));
   const slotW = plotW / weeks.length;
   const yFor = (v) => baselineY - (v / max) * plotH;
+  const xFor = (i) => PAD.left + i * slotW + slotW / 2;
+
+  const actualPoints = actual
+    ? actual.map((v, i) => (v == null ? null : { i, x: xFor(i), y: yFor(v), v })).filter(Boolean)
+    : [];
+  const lastActual = actualPoints[actualPoints.length - 1] || null;
+  const areaPath = actualPoints.length > 1
+    ? `${smoothPath(actualPoints)} L ${actualPoints[actualPoints.length - 1].x} ${baselineY} L ${actualPoints[0].x} ${baselineY} Z`
+    : "";
 
   const ticks = [0, max / 2, max];
 
   const hoveredWeek = hover != null ? weeks[hover] : null;
-  const tw = 122;
-  const th = 40;
+  const hoveredActual = hover != null && actual ? actual[hover] : null;
+  const tw = hoveredActual != null ? 140 : 122;
+  const th = hoveredActual != null ? 54 : 40;
   const hoverSlotX = hover != null ? PAD.left + hover * slotW : 0;
   const tipCx = hover != null
     ? Math.min(Math.max(hoverSlotX + slotW / 2, PAD.left + tw / 2 + 2), VW - PAD.right - tw / 2 - 2)
     : 0;
-  const tipTopY = hover != null ? Math.max(2, yFor(hoveredWeek.miles) - th - 8) : 0;
+  const tipTopY = hover != null
+    ? Math.max(2, Math.min(yFor(hoveredWeek.miles), hoveredActual != null ? yFor(hoveredActual) : Infinity) - th - 8)
+    : 0;
 
   return (
     <svg
@@ -106,13 +139,49 @@ export default function MileageChart({ plan, activeWeekIndex = null }) {
         );
       })}
 
+      {/* Actual mileage overlay — Strava-style filled line, drawn over the planned bars */}
+      {actualPoints.length > 1 && (
+        <>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" style={{ stopColor: "var(--blue)", stopOpacity: 0.35 }} />
+              <stop offset="100%" style={{ stopColor: "var(--blue)", stopOpacity: 0 }} />
+            </linearGradient>
+          </defs>
+          <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
+          <path d={smoothPath(actualPoints)} fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinecap="round" />
+          {actualPoints.map((p) => (
+            <circle
+              key={p.i} cx={p.x} cy={p.y}
+              r={p === lastActual ? 5 : 3}
+              fill={p === lastActual ? "var(--blue)" : "var(--card)"}
+              stroke="var(--blue)" strokeWidth="2"
+            />
+          ))}
+          {lastActual && (
+            <text
+              x={Math.min(lastActual.x + 8, VW - PAD.right - 2)} y={lastActual.y - 8}
+              textAnchor={lastActual.x > VW - PAD.right - 40 ? "end" : "start"}
+              fontSize="11" fontWeight="700" fill="var(--blue)"
+            >
+              {lastActual.v} mi
+            </text>
+          )}
+        </>
+      )}
+
       {hoveredWeek && (
         <g pointerEvents="none">
           <rect x={tipCx - tw / 2} y={tipTopY} width={tw} height={th} rx="8" fill="var(--solid)" />
           <text x={tipCx} y={tipTopY + 16} textAnchor="middle" fontSize="12" fontWeight="700" fill="#fff">
-            Week {hoveredWeek.week} · {hoveredWeek.miles} mi
+            Week {hoveredWeek.week} · {hoveredWeek.miles} mi{hoveredActual != null ? " planned" : ""}
           </text>
-          <text x={tipCx} y={tipTopY + 30} textAnchor="middle" fontSize="10" fill="#fff" opacity="0.85">
+          {hoveredActual != null ? (
+            <text x={tipCx} y={tipTopY + 31} textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--amber)">
+              {hoveredActual} mi actual
+            </text>
+          ) : null}
+          <text x={tipCx} y={tipTopY + th - 8} textAnchor="middle" fontSize="10" fill="#fff" opacity="0.85">
             {hoveredWeek.dates} · {hoveredWeek.phase}
           </text>
         </g>

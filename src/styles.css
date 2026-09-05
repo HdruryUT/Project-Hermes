@@ -146,6 +146,9 @@ body {
 .progress-meta { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); }
 .progress-meta b { color: var(--text); }
 
+.chart-legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.chart-legend .dot { width: 8px; height: 8px; }
+
 .glance-zones { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .glance { display: flex; flex-direction: column; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--card2); }
 .g-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted); }

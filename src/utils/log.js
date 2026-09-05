@@ -89,6 +89,25 @@ export function demoActivities(now = new Date()) {
   return acts;
 }
 
+// Actual miles run per plan week (index-aligned with PLAN), for overlaying onto the
+// planned-mileage chart. Weeks with no matching runs come back as 0, not null — callers
+// that only want weeks through "today" should slice/mask the result themselves.
+export function weeklyActualMiles(activities) {
+  const runs = allRuns(activities);
+  const start = new Date(PLAN_START + "T00:00:00");
+  const totals = new Array(PLAN.length).fill(0);
+  for (const r of runs) {
+    const d = new Date(r.date);
+    const localMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const diffDays = Math.floor((localMidnight - start) / 86400000);
+    if (diffDays < 0) continue;
+    const weekIndex = Math.floor(diffDays / 7);
+    if (weekIndex >= PLAN.length) continue;
+    totals[weekIndex] += r.miles;
+  }
+  return totals.map((m) => Math.round(m * 10) / 10);
+}
+
 export function logSummary(log) {
   const scored = log.filter((d) => (d.planned.miles || 0) > 0 && !d.isToday);
   const done = scored.filter((d) => d.status === "done").length;

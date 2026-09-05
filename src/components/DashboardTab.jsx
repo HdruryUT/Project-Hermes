@@ -1,6 +1,8 @@
 import { RACE_DATE, DAY_NAMES, PHASE_COLOR, weeklyMiles, PLAN } from "../data/plan.js";
 import { zoneForWorkout, zonePace, fmtPace, fmtDuration } from "../utils/paces.js";
 import { currentPosition, totalPlannedMiles, milesThroughWeek } from "../utils/schedule.js";
+import { weeklyActualMiles } from "../utils/log.js";
+import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { IconEating, IconGrocery, IconFlag, IconShirt } from "./icons.jsx";
 import MileageChart from "./MileageChart.jsx";
 
@@ -21,6 +23,12 @@ export default function DashboardTab({ zones, goToTab }) {
   const doneMiles = milesThroughWeek(pos.weekIndex);
   const totalMiles = totalPlannedMiles();
   const progressPct = Math.round((doneMiles / totalMiles) * 100);
+
+  const [activities] = useLocalStorage("orca.activities", null);
+  const cutoffWeek = state === "after" ? PLAN.length - 1 : state === "during" ? pos.weekIndex : -1;
+  const actualSeries = activities && cutoffWeek >= 0
+    ? weeklyActualMiles(activities).map((m, i) => (i <= cutoffWeek ? m : null))
+    : null;
 
   const todayZoneKey = zoneForWorkout(today.type);
   const todayPace = todayZoneKey ? zonePace(zones, todayZoneKey) : null;
@@ -111,9 +119,20 @@ export default function DashboardTab({ zones, goToTab }) {
 
       {/* Weekly mileage */}
       <div className="card">
-        <h2>Training Volume</h2>
-        <div className="sub">Planned miles per week across the plan{state === "during" ? " — this week is highlighted" : ""}.</div>
-        <MileageChart plan={PLAN} activeWeekIndex={state === "during" ? pos.weekIndex : null} />
+        <div className="card-row">
+          <h2>Training Volume</h2>
+          {actualSeries && (
+            <div className="chart-legend">
+              <span><span className="dot" style={{ background: "var(--muted)" }} />Planned</span>
+              <span><span className="dot" style={{ background: "var(--blue)" }} />Actual</span>
+            </div>
+          )}
+        </div>
+        <div className="sub">
+          Planned miles per week across the plan{state === "during" ? " — this week is highlighted" : ""}.
+          {!activities && " Sync Strava on the Log tab to see actual mileage overlaid here."}
+        </div>
+        <MileageChart plan={PLAN} activeWeekIndex={state === "during" ? pos.weekIndex : null} actual={actualSeries} />
       </div>
 
       {/* Progress + paces */}
