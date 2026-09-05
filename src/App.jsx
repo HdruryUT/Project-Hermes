@@ -18,13 +18,13 @@ import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, I
 const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: IconHome },
   { id: "schedule", label: "Schedule", Icon: IconCalendar },
-  { id: "log", label: "Log", Icon: IconLog },
   { id: "strength", label: "Strength", Icon: IconDumbbell },
-  { id: "eating", label: "Eating", Icon: IconEating },
   { id: "fuel", label: "Fuel Calc", Icon: IconDroplet },
+  { id: "eating", label: "Eating", Icon: IconEating },
   { id: "grocery", label: "Grocery", Icon: IconGrocery },
-  { id: "raceday", label: "Race Day", Icon: IconFlag },
   { id: "gear", label: "Gear", Icon: IconShirt },
+  { id: "raceday", label: "Race Day", Icon: IconFlag },
+  { id: "log", label: "Log", Icon: IconLog },
   { id: "paces", label: "Paces & Strava", Icon: IconGauge },
 ];
 
