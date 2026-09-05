@@ -12,11 +12,13 @@ import GearTab from "./components/GearTab.jsx";
 import SettingsTab from "./components/SettingsTab.jsx";
 import FuelCalcTab from "./components/FuelCalcTab.jsx";
 import StrengthTab from "./components/StrengthTab.jsx";
-import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet, IconDumbbell } from "./components/icons.jsx";
+import LogTab from "./components/LogTab.jsx";
+import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet, IconDumbbell, IconLog } from "./components/icons.jsx";
 
 const TABS = [
   { id: "dashboard", label: "Dashboard", Icon: IconHome },
   { id: "schedule", label: "Schedule", Icon: IconCalendar },
+  { id: "log", label: "Log", Icon: IconLog },
   { id: "strength", label: "Strength", Icon: IconDumbbell },
   { id: "eating", label: "Eating", Icon: IconEating },
   { id: "fuel", label: "Fuel Calc", Icon: IconDroplet },
@@ -79,30 +81,35 @@ export default function App() {
         </div>
       </header>
 
-      <nav className="tabs">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            className={`tab-btn ${tab === t.id ? "active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            <t.Icon size={17} />
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </nav>
+      <div className="layout">
+        <nav className="tabs">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              className={`tab-btn ${tab === t.id ? "active" : ""}`}
+              onClick={() => setTab(t.id)}
+            >
+              <t.Icon size={17} />
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </nav>
 
-      {tab === "dashboard" && <DashboardTab zones={zones} goToTab={setTab} />}
-      {tab === "schedule" && <ScheduleTab zones={zones} />}
-      {tab === "strength" && <StrengthTab />}
-      {tab === "eating" && <EatingTab />}
-      {tab === "fuel" && <FuelCalcTab zones={zones} />}
-      {tab === "grocery" && <GroceryTab />}
-      {tab === "raceday" && <RaceDayTab />}
-      {tab === "gear" && <GearTab />}
-      {tab === "paces" && <SettingsTab effort={effort} onSetEffort={setEffort} />}
+        <div className="main">
+          {tab === "dashboard" && <DashboardTab zones={zones} goToTab={setTab} />}
+          {tab === "schedule" && <ScheduleTab zones={zones} />}
+          {tab === "log" && <LogTab />}
+          {tab === "strength" && <StrengthTab />}
+          {tab === "eating" && <EatingTab />}
+          {tab === "fuel" && <FuelCalcTab zones={zones} />}
+          {tab === "grocery" && <GroceryTab />}
+          {tab === "raceday" && <RaceDayTab />}
+          {tab === "gear" && <GearTab />}
+          {tab === "paces" && <SettingsTab effort={effort} onSetEffort={setEffort} />}
 
-      <div className="footer">Project Hermes · local training companion · your data stays in this browser</div>
+          <div className="footer">Project Hermes · local training companion · your data stays in this browser</div>
+        </div>
+      </div>
     </div>
   );
 }

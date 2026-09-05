@@ -94,6 +94,17 @@ export function IconDroplet({ size = 18 }) {
   );
 }
 
+export function IconLog({ size = 18 }) {
+  return (
+    <Svg size={size}>
+      <rect x="4.5" y="3.5" width="15" height="17" rx="2.5" />
+      <path d="M9 3.5v3h6v-3" />
+      <path d="m8.5 12 2 2 4-4.5" />
+      <path d="M8 16.5h8" />
+    </Svg>
+  );
+}
+
 export function IconDumbbell({ size = 18 }) {
   return (
     <Svg size={size}>

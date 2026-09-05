@@ -31,11 +31,17 @@ export function filterRecentRuns(activities, weeks = 6, minMiles = 3) {
     .map((a) => ({
       id: a.id,
       name: a.name,
-      date: a.start_date,
+      date: a.start_date_local || a.start_date,
       miles: a.distance / METERS_PER_MILE,
       seconds: a.moving_time,
     }))
     .filter((a) => a.miles >= minMiles && a.seconds > 0);
+}
+
+// All runs across the whole training block (for matching against the plan in the Log tab) —
+// no recency/distance cutoff, unlike filterRecentRuns which is tuned for picking a fitness effort.
+export function allRuns(activities, weeks = 20) {
+  return filterRecentRuns(activities, weeks, 0);
 }
 
 export function bestEffort(runs) {
