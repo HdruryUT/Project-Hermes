@@ -1,6 +1,6 @@
 // Matches actual Strava activities against the planned schedule so the Log tab can show
 // planned-vs-actual instead of just the static plan.
-import { PLAN, PLAN_START, DAY_NAMES } from "../data/plan.js";
+import { PLAN, PLAN_START, DAY_NAMES, weeklyMiles } from "../data/plan.js";
 import { allRuns } from "../services/strava.js";
 
 function addDays(date, n) {
@@ -28,34 +28,6 @@ export function plannedDaysThroughToday(now = new Date()) {
     });
   });
   return out;
-}
-
-// status: "done" | "partial" | "missed" | "today" | "extra" | "asplanned" (rest/strength day with no run)
-export function buildLog(activities, now = new Date()) {
-  const runs = allRuns(activities);
-  const runsByDate = {};
-  for (const r of runs) {
-    const day = (r.date || "").slice(0, 10);
-    (runsByDate[day] ||= []).push(r);
-  }
-
-  const days = plannedDaysThroughToday(now);
-  return days.map((d) => {
-    const matches = runsByDate[d.key] || [];
-    const actualMiles = matches.reduce((s, r) => s + r.miles, 0);
-    const actualSeconds = matches.reduce((s, r) => s + r.seconds, 0);
-    const plannedMiles = d.planned.miles || 0;
-
-    let status;
-    if (plannedMiles > 0) {
-      if (matches.length) status = actualMiles >= plannedMiles * 0.85 ? "done" : "partial";
-      else status = d.isToday ? "today" : "missed";
-    } else {
-      status = matches.length ? "extra" : "asplanned";
-    }
-
-    return { ...d, matches, actualMiles, actualSeconds, status };
-  });
 }
 
 // Synthetic Strava-shaped activities spanning the actual plan dates, for the Log tab's demo
@@ -108,17 +80,18 @@ export function weeklyActualMiles(activities) {
   return totals.map((m) => Math.round(m * 10) / 10);
 }
 
-export function logSummary(log) {
-  const scored = log.filter((d) => (d.planned.miles || 0) > 0 && !d.isToday);
-  const done = scored.filter((d) => d.status === "done").length;
-  const partial = scored.filter((d) => d.status === "partial").length;
-  const missed = scored.filter((d) => d.status === "missed").length;
-  const plannedMiles = scored.reduce((s, d) => s + d.planned.miles, 0);
-  const actualMiles = log.reduce((s, d) => s + d.actualMiles, 0);
-  return {
-    total: scored.length, done, partial, missed,
-    adherencePct: scored.length ? Math.round(((done + partial * 0.5) / scored.length) * 100) : null,
-    plannedMiles: Math.round(plannedMiles * 10) / 10,
-    actualMiles: Math.round(actualMiles * 10) / 10,
-  };
+// Planned vs. actual mileage per week, through the current (or most recent) plan week —
+// future weeks are omitted rather than shown as "0 actual", since nothing's due yet.
+export function weeklyMileageThroughToday(activities, weekIndex) {
+  if (weekIndex < 0) return [];
+  const actual = weeklyActualMiles(activities);
+  return PLAN.slice(0, weekIndex + 1).map((w, i) => ({
+    week: w.week, dates: w.dates, phase: w.phase,
+    planned: weeklyMiles(w), actual: actual[i],
+  }));
+}
+
+// All synced runs, newest first — a simple activity feed rather than plan-matched.
+export function recentRuns(activities) {
+  return allRuns(activities).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
 }

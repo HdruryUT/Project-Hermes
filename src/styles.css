@@ -190,6 +190,14 @@ body {
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
 
 /* ---------- Log ---------- */
+.mi-row { padding: 12px 0; border-top: 1px solid var(--line); }
+.mi-row:first-of-type { border-top: none; padding-top: 4px; }
+.mi-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.mi-week { font-weight: 700; color: var(--text); font-size: 14px; }
+.mi-dates { font-size: 12px; }
+.mi-head .log-badge { margin-left: auto; }
+.mi-numbers { font-size: 13px; color: var(--text); margin-top: 6px; }
+
 .log-days { display: flex; flex-direction: column; }
 .log-row {
   display: grid; grid-template-columns: 64px 1fr auto auto; align-items: center; gap: 12px;
@@ -204,10 +212,7 @@ body {
 .log-badge.st-done { background: rgba(74, 140, 83, 0.15); color: #3f7a46; }
 .log-badge.st-partial { background: rgba(244, 183, 64, 0.2); color: #9c6b0a; }
 .log-badge.st-missed { background: rgba(239, 108, 77, 0.15); color: #c65a3d; }
-.log-badge.st-today { background: rgba(156, 107, 10, 0.15); color: var(--blue2); }
-.log-badge.st-extra { background: rgba(92, 42, 26, 0.1); color: var(--ink); }
 [data-theme="dark"] .log-badge.st-done { background: rgba(107, 200, 120, 0.15); color: #7fd68c; }
-.log-row.st-missed { background: rgba(239, 108, 77, 0.05); }
 @media (max-width: 640px) {
   .log-row { grid-template-columns: 52px 1fr; row-gap: 4px; }
   .log-actual, .log-badge { grid-column: 2; justify-self: start; text-align: left; }

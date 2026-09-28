@@ -1,53 +1,52 @@
 import { useState, useMemo } from "react";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { stravaStatus, fetchActivitiesFromBackend, fetchActivities } from "../services/strava.js";
-import { buildLog, logSummary, demoActivities } from "../utils/log.js";
+import { weeklyMileageThroughToday, recentRuns, demoActivities } from "../utils/log.js";
+import { currentPosition } from "../utils/schedule.js";
 import { fmtPace } from "../utils/paces.js";
 import { PHASE_COLOR } from "../data/plan.js";
-
-const STATUS_META = {
-  done: { label: "Done", cls: "st-done" },
-  partial: { label: "Partial", cls: "st-partial" },
-  missed: { label: "Missed", cls: "st-missed" },
-  today: { label: "Today", cls: "st-today" },
-  extra: { label: "Extra run", cls: "st-extra" },
-  asplanned: { label: "", cls: "st-plain" },
-};
 
 function paceText(miles, seconds) {
   if (!miles || !seconds) return null;
   return fmtPace(seconds / miles);
 }
 
-function DayRow({ d }) {
-  const meta = STATUS_META[d.status];
-  const dateLabel = d.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-  const pace = paceText(d.actualMiles, d.actualSeconds);
+function WeekRow({ w }) {
+  const pct = w.planned > 0 ? Math.round((w.actual / w.planned) * 100) : null;
+  const cls = pct == null ? "" : pct >= 90 ? "st-done" : pct >= 60 ? "st-partial" : "st-missed";
+  const badgeLabel = pct == null ? null : pct >= 90 ? "On target" : pct >= 60 ? "Under" : "Well under";
   return (
-    <div className={`log-row ${meta.cls}`}>
+    <div className="mi-row">
+      <div className="mi-head">
+        <span className="mi-week">Week {w.week}</span>
+        <span className="mi-dates muted">{w.dates}</span>
+        <span className="phase-pill" style={{ background: PHASE_COLOR[w.phase] || "var(--blue)" }}>{w.phase}</span>
+        {badgeLabel && <span className={`log-badge ${cls}`}>{badgeLabel}</span>}
+      </div>
+      <div className="progressbar"><span style={{ width: `${Math.min(100, pct ?? 0)}%` }} /></div>
+      <div className="mi-numbers">
+        <b>{w.actual}</b> / {w.planned} mi{pct != null && <span className="muted"> · {pct}%</span>}
+      </div>
+    </div>
+  );
+}
+
+function RunRow({ r }) {
+  const pace = paceText(r.miles, r.seconds);
+  const d = new Date(r.date);
+  return (
+    <div className="log-row">
       <div className="log-date">
-        <div className="log-dow">{d.dayName}</div>
-        <div className="log-daynum">{dateLabel}</div>
+        <div className="log-dow">{d.toLocaleDateString(undefined, { weekday: "short" })}</div>
+        <div className="log-daynum">{d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
       </div>
       <div className="log-planned">
-        <div className="log-planned-label">{d.planned.label}</div>
+        <div className="log-planned-label">{r.name}</div>
       </div>
       <div className="log-actual">
-        {d.matches.length ? (
-          <>
-            <b>{d.actualMiles.toFixed(1)} mi</b>
-            {pace && <span className="muted"> · {pace}/mi</span>}
-            {d.matches.length > 1 && <span className="muted"> · {d.matches.length} runs</span>}
-          </>
-        ) : d.status === "missed" ? (
-          <span className="muted">No matching run</span>
-        ) : d.status === "today" ? (
-          <span className="muted">Not synced yet</span>
-        ) : (
-          <span className="muted">—</span>
-        )}
+        <b>{r.miles.toFixed(1)} mi</b>
+        {pace && <span className="muted"> · {pace}/mi</span>}
       </div>
-      {meta.label && <div className={`log-badge ${meta.cls}`}>{meta.label}</div>}
     </div>
   );
 }
@@ -64,17 +63,16 @@ export default function LogTab() {
     stravaStatus().then((s) => setConnected(s.connected));
   }, []);
 
-  const log = useMemo(() => (activities ? buildLog(activities) : null), [activities]);
-  const summary = useMemo(() => (log ? logSummary(log) : null), [log]);
-  const weeks = useMemo(() => {
-    if (!log) return [];
-    const byWeek = new Map();
-    for (const d of log) {
-      if (!byWeek.has(d.weekIndex)) byWeek.set(d.weekIndex, { week: d.week, days: [] });
-      byWeek.get(d.weekIndex).days.push(d);
-    }
-    return [...byWeek.values()].reverse();
-  }, [log]);
+  const pos = currentPosition();
+  const cutoffWeek = pos.state === "before" ? -1 : pos.weekIndex;
+
+  const weeks = useMemo(
+    () => (activities ? weeklyMileageThroughToday(activities, cutoffWeek).reverse() : []),
+    [activities, cutoffWeek]
+  );
+  const runs = useMemo(() => (activities ? recentRuns(activities) : []), [activities]);
+  const totalActual = weeks.reduce((s, w) => s + w.actual, 0);
+  const totalPlanned = weeks.reduce((s, w) => s + w.planned, 0);
 
   async function sync() {
     setBusy(true); setStatus(null);
@@ -82,7 +80,7 @@ export default function LogTab() {
       const data = await fetchActivitiesFromBackend();
       setActivities(data);
       setSyncedAt(new Date().toISOString());
-      setStatus({ type: "info", msg: "Synced — planned vs. actual updated below." });
+      setStatus({ type: "info", msg: "Synced — mileage and recent runs updated below." });
     } catch (err) {
       setStatus({ type: "warn", msg: err.message });
     } finally {
@@ -97,7 +95,7 @@ export default function LogTab() {
       const data = await fetchActivities(token.trim());
       setActivities(data);
       setSyncedAt(new Date().toISOString());
-      setStatus({ type: "info", msg: "Synced — planned vs. actual updated below." });
+      setStatus({ type: "info", msg: "Synced — mileage and recent runs updated below." });
     } catch (err) {
       setStatus({ type: "warn", msg: err.message });
     } finally {
@@ -116,8 +114,8 @@ export default function LogTab() {
       <div className="card">
         <h2>Training Log</h2>
         <div className="sub">
-          Planned workouts from the schedule, matched against your actual Strava runs by date — so you can see
-          adherence, not just the plan.
+          Your actual Strava mileage, week by week against target — plus a feed of every run synced for this
+          training block.
         </div>
 
         {status && <div className={`banner ${status.type}`}>{status.msg}</div>}
@@ -150,38 +148,30 @@ export default function LogTab() {
         {syncedAt && <div className="hint" style={{ marginTop: 10 }}>Last synced {new Date(syncedAt).toLocaleString()}.</div>}
       </div>
 
-      {summary && (
+      {weeks.length > 0 && (
         <div className="card">
           <div className="card-row">
-            <h2>Adherence so far</h2>
-            <span className="week-total"><b>{summary.actualMiles}</b> / {summary.plannedMiles} planned mi</span>
+            <h2>Weekly Mileage</h2>
+            <span className="week-total"><b>{Math.round(totalActual * 10) / 10}</b> / {Math.round(totalPlanned * 10) / 10} mi total</span>
           </div>
-          <div className="progressbar"><span style={{ width: `${summary.adherencePct ?? 0}%` }} /></div>
-          <div className="progress-meta">
-            <span><b>{summary.done}</b> done</span>
-            <span><b>{summary.partial}</b> partial</span>
-            <span><b>{summary.missed}</b> missed</span>
-            <span>of <b>{summary.total}</b> planned runs</span>
+          <div className="sub">Actual synced mileage vs. your planned target for each week so far.</div>
+          {weeks.map((w) => <WeekRow key={w.week} w={w} />)}
+        </div>
+      )}
+
+      {runs.length > 0 && (
+        <div className="card">
+          <h2>Recent Runs</h2>
+          <div className="sub">Everything Strava has recorded for this training block, newest first.</div>
+          <div className="log-days">
+            {runs.map((r) => <RunRow key={r.id} r={r} />)}
           </div>
         </div>
       )}
 
-      {weeks.map(({ week, days }) => (
-        <div className="week" key={week.week}>
-          <div className="week-head">
-            <span className="week-badge">Week {week.week}</span>
-            <span className="week-dates">{week.dates}</span>
-            <span className="phase-pill" style={{ background: PHASE_COLOR[week.phase] || "var(--blue)" }}>{week.phase}</span>
-          </div>
-          <div className="log-days">
-            {days.map((d) => <DayRow key={d.key} d={d} />)}
-          </div>
-        </div>
-      ))}
-
-      {!log && (
+      {!activities && (
         <div className="card">
-          <div className="today-note">Sync Strava (or load demo data) above to see planned vs. actual for the weeks you've already run.</div>
+          <div className="today-note">Sync Strava (or load demo data) above to see your weekly mileage and recent runs.</div>
         </div>
       )}
     </div>
