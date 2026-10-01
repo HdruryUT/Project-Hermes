@@ -1,17 +1,10 @@
-import { RACE_DATE, DAY_NAMES, PHASE_COLOR, weeklyMiles, PLAN } from "../data/plan.js";
+import { DAY_NAMES, PHASE_COLOR, weeklyMiles, PLAN } from "../data/plan.js";
 import { zoneForWorkout, zonePace, fmtPace, fmtDuration } from "../utils/paces.js";
-import { currentPosition, totalPlannedMiles, milesThroughWeek } from "../utils/schedule.js";
+import { currentPosition, totalPlannedMiles, milesThroughWeek, daysUntilRace } from "../utils/schedule.js";
 import { weeklyActualMiles } from "../utils/log.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { IconEating, IconGrocery, IconFlag, IconShirt } from "./icons.jsx";
 import MileageChart from "./MileageChart.jsx";
-
-function daysUntilRace() {
-  const race = new Date(RACE_DATE + "T00:00:00");
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.ceil((race - now) / 86400000));
-}
 
 const GLANCE_ZONES = ["easy", "long", "tempo", "marathon"];
 

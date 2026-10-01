@@ -1,5 +1,5 @@
 import { RACE_DAY, RACE_PACING } from "../data/nutrition.js";
-import courseMapImg from "../assets/course-map.png";
+import courseMapImg from "../assets/course-map.jpg";
 
 export default function RaceDayTab() {
   return (

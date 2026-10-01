@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { RACE_DATE } from "./data/plan.js";
+import { daysUntilRace } from "./utils/schedule.js";
 import { computeZones } from "./utils/paces.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import HermesLogo from "./components/HermesLogo.jsx";
@@ -27,13 +27,6 @@ const TABS = [
   { id: "log", label: "Log", Icon: IconLog },
   { id: "paces", label: "Paces & Strava", Icon: IconGauge },
 ];
-
-function daysUntilRace() {
-  const race = new Date(RACE_DATE + "T00:00:00");
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  return Math.max(0, Math.ceil((race - now) / 86400000));
-}
 
 export default function App() {
   const [tab, setTab] = useState(() =>

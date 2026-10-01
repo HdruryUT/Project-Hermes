@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { stravaStatus, fetchActivitiesFromBackend, fetchActivities } from "../services/strava.js";
 import { weeklyMileageThroughToday, recentRuns, demoActivities } from "../utils/log.js";
@@ -59,7 +59,7 @@ export default function LogTab() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null);
 
-  useMemo(() => {
+  useEffect(() => {
     stravaStatus().then((s) => setConnected(s.connected));
   }, []);
 

@@ -1,6 +1,6 @@
 // Figures out where "today" falls in the plan so the Dashboard can show the
 // current week and today's workout.
-import { PLAN, PLAN_START, DAY_NAMES, weeklyMiles } from "../data/plan.js";
+import { PLAN, PLAN_START, RACE_DATE, DAY_NAMES, weeklyMiles } from "../data/plan.js";
 
 function atMidnight(d) {
   const x = new Date(d);
@@ -40,4 +40,10 @@ export function totalPlannedMiles() {
 // Miles scheduled up to and including the current week (a rough progress proxy).
 export function milesThroughWeek(weekIndex) {
   return PLAN.slice(0, weekIndex + 1).reduce((s, w) => s + weeklyMiles(w), 0);
+}
+
+// Whole days from today until race day (0 on or after race day).
+export function daysUntilRace(now = new Date()) {
+  const race = atMidnight(new Date(RACE_DATE + "T00:00:00"));
+  return Math.max(0, Math.ceil((race - atMidnight(now)) / 86400000));
 }

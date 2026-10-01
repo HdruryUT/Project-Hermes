@@ -1,7 +1,7 @@
 # Project Hermes — Marathon Training App
 
 A local React app for your October 10, 2026 marathon. Tabs: **Dashboard, Schedule, Strength,
-Eating, Fuel Calc, Grocery, Race Day, Gear,** and **Paces & Strava**. It personalizes every
+Fuel Calc, Eating, Grocery, Gear, Race Day, Log,** and **Paces & Strava**. It personalizes every
 workout's target pace from a recent run — pulled from Strava or entered by hand — and
 includes a light/dark theme and an at-a-glance dashboard.
 
@@ -76,6 +76,7 @@ which is exactly when the manual-token fallback in the Connect Strava card is us
 
 ```
 api/                      Vercel serverless functions (only live once deployed)
+├─ _lib/strava.js         shared cookie + token-refresh helpers (not itself an endpoint)
 └─ strava/
    ├─ login.js            redirect to Strava's OAuth consent screen
    ├─ callback.js         exchange the auth code, store a refresh token (httpOnly cookie)
@@ -94,12 +95,17 @@ src/
 ├─ utils/
 │  ├─ paces.js            Riegel predictor + training-pace zones
 │  ├─ fuel.js             carb/fluid/sodium estimator for long runs
-│  └─ schedule.js         "where am I in the plan today" helper
+│  ├─ schedule.js         "where am I in the plan today" + race countdown helpers
+│  └─ log.js              matches synced Strava runs to plan weeks (planned vs. actual mileage)
 ├─ services/strava.js     Strava fetch (manual token + connect-once backend) + demo data
 ├─ hooks/useLocalStorage.js
 └─ components/
    ├─ HermesLogo.jsx      winged Hermes mark
    ├─ DashboardTab.jsx    home: countdown, today, this week, progress, paces
+   ├─ MileageChart.jsx    weekly planned-mileage chart with actual-miles overlay
+   ├─ LogTab.jsx          Training Log: weekly actual vs. target + recent-run feed
+   ├─ SettingsTab.jsx     the Paces & Strava tab
+   ├─ icons.jsx           line-icon set for the sidebar nav
    └─ …Tab.jsx            one file per tab
 ```
 
