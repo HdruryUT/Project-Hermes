@@ -89,7 +89,7 @@ src/
 ├─ styles.css             Hermes gold/bronze theme + dark mode (CSS variables)
 ├─ data/
 │  ├─ plan.js             the 10-week schedule + phase colors
-│  ├─ strength.js         Monday/Friday strength sessions for runners
+│  ├─ strength.js         periodized strength + plyometric program (phases follow the plan)
 │  └─ nutrition.js        eating schedule (evening runner), grocery, race-day, gear, race pacing plan
 ├─ utils/
 │  ├─ paces.js            Riegel predictor + training-pace zones

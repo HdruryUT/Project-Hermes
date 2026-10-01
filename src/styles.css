@@ -237,6 +237,21 @@ table.grid td.when { font-weight: 700; color: var(--ink); white-space: nowrap; }
 .grocery-cols { columns: 2; column-gap: 28px; }
 .grocery-cols .check-group { break-inside: avoid; }
 
+/* Strength tab */
+.check .rx { margin-left: 8px; font-size: 13px; font-weight: 600; color: var(--ink); }
+.check .note.why { font-style: italic; }
+.phase-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.phase-pill { border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 7px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.phase-pill:hover { border-color: var(--blue); }
+.phase-pill.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+.phase-pill .now { font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; background: var(--orange); color: #fff; border-radius: 999px; padding: 1px 6px; }
+.phase-weeks { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.cue-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.cue-toggle input { accent-color: var(--blue); }
+.today-card { border: 2px solid var(--blue); }
+.today-tag { margin-left: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; background: var(--orange); color: #fff; border-radius: 999px; padding: 2px 8px; vertical-align: middle; }
+.card a { color: var(--blue); }
+
 .progress { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
 .progress b { color: var(--blue); }
 
