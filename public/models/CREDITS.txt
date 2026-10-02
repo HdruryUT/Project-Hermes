@@ -1,0 +1,3 @@
+cat.glb — "Cat" by J-Toastie, via Poly Pizza (https://poly.pizza/m/DJ9rpAhrh3)
+Licensed under Creative Commons Attribution 3.0 (CC-BY 3.0): https://creativecommons.org/licenses/by/3.0/
+Used as-is; the app recolours it black and animates its skeleton procedurally (src/game/cat.js).

@@ -8,3 +8,6 @@ dist
 *.log
 _t.mjs
 vite.config.js.timestamp-*
+
+# Your personal 3D body scan — public/ is served publicly once deployed
+public/models/me.glb

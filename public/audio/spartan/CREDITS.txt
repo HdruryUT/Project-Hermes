@@ -1,0 +1,10 @@
+Orchestral samples from the Versilian Studios Chamber Orchestra 2 Community Edition
+(VSCO-2-CE) by Sam Gossner / Versilian Studios — https://github.com/sgossner/VSCO-2-CE
+Released under CC0 1.0 (public domain). Trimmed, normalized and re-encoded to AAC for this app.
+
+Choir samples from Freesound, both CC0 1.0 (public domain):
+  choir_ahh.m4a — "CRWDSing_Ahh Vowel Sung Near F 02_ShaneVincent_GSC24_XY-AK" by ShangusBurger
+                  https://freesound.org/people/ShangusBurger/sounds/763910/
+  choir_ooh.m4a — "Voice Choir OOOH.wav" by Uzbazur
+                  https://freesound.org/people/Uzbazur/sounds/413713/
+Trimmed, normalized and re-encoded to AAC for this app.

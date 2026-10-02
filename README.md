@@ -1,9 +1,21 @@
 # Project Hermes — Marathon Training App
 
+The app is styled like a video-game character screen in a neon Greek temple: a 3D arena
+renders behind everything (your character turning on a pedestal), the tabs are the main menu,
+and each tab opens in the panel on the right. A black cat wanders the arena.
+
+Two modes, switched in the top bar, each with its own look and soundtrack:
+- **Blue** — cyan neon, a synthwave track generated in the browser.
+- **Red** — Spartan red, an original choral-orchestral track played from real recordings
+  (`public/audio/spartan/`, ~2 MB, downloaded the first time red is chosen).
+
+Music only starts after a click (browser rule); the **Sound** button mutes it. Asset credits are
+in `public/audio/spartan/CREDITS.txt`, `public/models/CREDITS.txt` and the app footer.
+
 A local React app for your October 10, 2026 marathon. Tabs: **Dashboard, Schedule, Strength,
 Fuel Calc, Eating, Grocery, Gear, Race Day, Log,** and **Paces & Strava**. It personalizes every
 workout's target pace from a recent run — pulled from Strava or entered by hand — and
-includes a light/dark theme and an at-a-glance dashboard.
+includes an at-a-glance dashboard.
 
 ---
 
@@ -28,6 +40,21 @@ Push to GitHub, then in Vercel: **Add New → Project → import the repo**. It 
 Vite (build `npm run build`, output `dist`). Deploy. Every future `git push` redeploys.
 
 ---
+
+## Your 3D character
+
+Until you add a scan of yourself, the pedestal shows a hologram stand-in. To use your own body:
+
+1. **Capture a scan** with a phone 3D-scanning app — e.g. Polycam, Scaniverse or KIRI Engine.
+   Stand still, arms slightly away from your sides, while someone walks a slow full circle
+   around you (two passes: one at chest height, one lower). Good, even light helps a lot.
+2. **Export as GLB** (`.glb`). If the app offers it, reduce/decimate the mesh so the file is
+   ideally under ~20 MB — it downloads every time the app opens.
+3. **Save it as `public/models/me.glb`.** Reload — the app finds it automatically, scales it to
+   the pedestal and swaps out the hologram. Any height/units/orientation from the app is fine.
+
+Heads-up: anything in `public/` is served publicly once deployed. `me.glb` is in `.gitignore`
+so your scan stays on your machine; remove that line if you do want it on the live site.
 
 ## Personalize paces
 
@@ -84,10 +111,20 @@ api/                      Vercel serverless functions (only live once deployed)
    ├─ status.js           tells the frontend whether Strava is connected
    └─ disconnect.js       clears the stored refresh token
 
+public/models/me.glb      your 3D scan (optional, git-ignored — see "Your 3D character")
+public/models/cat.glb     the cat model (CC-BY 3.0, credited)
+public/audio/spartan/     orchestra + choir samples for the red track (CC0)
+
 src/
 ├─ main.jsx
-├─ App.jsx                tab shell, dark-mode toggle, countdown, pace state
-├─ styles.css             Hermes gold/bronze theme + dark mode (CSS variables)
+├─ App.jsx                game shell: HUD bar, menu, stage, panel, countdown, pace state
+├─ styles.css             neon Greek game theme (CSS variables) + per-tab styles
+├─ game/
+│  ├─ scene.js            three.js arena: temple colonnade, pedestal, hologram/scan, bloom, modes
+│  ├─ cat.js              the roaming black cat (procedural walk/trot/sit on a rigged model)
+│  ├─ Arena.jsx           mounts the scene and frames the figure on the stage area
+│  ├─ tracks.js           the two soundtracks (synth "Messenger", sampled "Spartan")
+│  └─ audio.js            playback, crossfading between tracks, menu sounds
 ├─ data/
 │  ├─ plan.js             the 10-week schedule + phase colors
 │  ├─ strength.js         periodized strength + plyometric program (phases follow the plan)
@@ -115,6 +152,7 @@ src/
 - Meals, grocery, race-day, gear → `src/data/nutrition.js`
 - How paces are derived → `computeZones` in `src/utils/paces.js`
 - Colors / theme → CSS variables at the top of `src/styles.css`
+- 3D arena (columns, pedestal, lighting) → `src/game/scene.js`; music → `src/game/audio.js`
 
 ## Notes
 
