@@ -10,13 +10,42 @@ let ctx = null, master, sfx;
 let enabled = false, current = "blue";
 const players = {}; // track name → { out, track, timer, step, nextTime }
 
+// iOS 17+: treat this as media playback, so it isn't muted by the ring/silent switch.
+function setPlaybackSession() {
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = "playback";
+  } catch {
+    /* unsupported */
+  }
+}
+
+// Transparent below 0.8, then rounds peaks smoothly toward 1.0 — a backstop for the rare
+// overs the compressor's automatic make-up gain lets through, which would otherwise clip hard.
+export function softCeiling(ctx) {
+  const shaper = ctx.createWaveShaper();
+  const n = 2048, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i / (n - 1)) * 2 - 1, a = Math.abs(x);
+    curve[i] = Math.sign(x) * (a < 0.8 ? a : 0.8 + 0.2 * Math.tanh((a - 0.8) / 0.2));
+  }
+  shaper.curve = curve;
+  shaper.oversample = "2x";
+  return shaper;
+}
+
 function init() {
   if (ctx) return;
+  setPlaybackSession();
   ctx = new (window.AudioContext || window.webkitAudioContext)();
+  // A safety limiter: catches only peaks near full scale, so the soundtracks keep their
+  // quiet-to-loud contrast (a lower threshold flattens the red track's build).
   master = ctx.createDynamicsCompressor();
-  master.threshold.value = -14;
-  master.ratio.value = 4;
-  master.connect(ctx.destination);
+  master.threshold.value = -3;
+  master.knee.value = 2;
+  master.ratio.value = 20;
+  master.attack.value = 0.003;
+  master.release.value = 0.25;
+  master.connect(softCeiling(ctx)).connect(ctx.destination);
   sfx = ctx.createGain();
   sfx.gain.value = 0.5;
   sfx.connect(master);
@@ -77,15 +106,35 @@ function stop(name) {
   setTimeout(() => clearInterval(timer), 900);
 }
 
-// Resume on the first gesture if the browser kept the context suspended.
+// Unlock audio output. Must run synchronously inside a tap/click handler: iOS only lets audio
+// start from code running directly in the gesture — not from a React effect afterwards.
+export function unlockAudio() {
+  init();
+  setPlaybackSession();
+  if (ctx.state !== "running") ctx.resume().catch(() => {});
+  // Starting a silent one-sample buffer inside the gesture is what unlocks older iOS versions.
+  const src = ctx.createBufferSource();
+  src.buffer = ctx.createBuffer(1, 1, ctx.sampleRate);
+  src.connect(ctx.destination);
+  src.start(0);
+}
+
+// If sound was left on last visit, the context starts suspended; unlock on the first real
+// gesture. iOS counts touchend/click as activation (not touchstart/pointerdown).
+const GESTURES = ["touchend", "click", "keydown"];
+let gestureHooked = false;
 function resumeOnGesture() {
+  if (gestureHooked) return;
+  gestureHooked = true;
   const go = () => {
-    window.removeEventListener("pointerdown", go);
-    window.removeEventListener("keydown", go);
-    if (enabled) ctx.resume();
+    if (enabled) unlockAudio();
+    // resume() settles asynchronously, so stay hooked until a later gesture finds it running.
+    if (ctx.state === "running" || !enabled) {
+      GESTURES.forEach((g) => window.removeEventListener(g, go, true));
+      gestureHooked = false;
+    }
   };
-  window.addEventListener("pointerdown", go);
-  window.addEventListener("keydown", go);
+  GESTURES.forEach((g) => window.addEventListener(g, go, true));
 }
 
 export function setSoundEnabled(on) {

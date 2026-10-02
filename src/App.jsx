@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { computeZones } from "./utils/paces.js";
 import { daysUntilRace, currentPosition, milesThroughWeek, totalPlannedMiles } from "./utils/schedule.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
-import { setSoundEnabled, setTrack, playHover, playSelect } from "./game/audio.js";
+import { setSoundEnabled, setTrack, unlockAudio, playHover, playSelect } from "./game/audio.js";
 import HermesLogo from "./components/HermesLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
 import ScheduleTab from "./components/ScheduleTab.jsx";
@@ -104,6 +104,7 @@ export default function App() {
 
   // Picking a mode is also "play that mode's song", so it turns the music on.
   function selectMode(id) {
+    unlockAudio(); // inside the tap itself — iOS won't start audio from the effect that follows
     playSelect();
     setMode(id);
     if (!sound) setSound(true);
@@ -173,7 +174,13 @@ export default function App() {
         <div className="hud-right">
           <span className={`chip ${zones ? "ok" : ""}`}>{zones ? "Paces calibrated" : "Paces not set"}</span>
           <ModeToggle mode={mode} onSelect={selectMode} />
-          <SoundToggle on={sound} onToggle={() => setSound(!sound)} />
+          <SoundToggle
+            on={sound}
+            onToggle={() => {
+              if (!sound) unlockAudio(); // inside the tap itself, for iOS
+              setSound(!sound);
+            }}
+          />
         </div>
       </header>
 

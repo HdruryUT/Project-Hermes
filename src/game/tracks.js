@@ -2,10 +2,10 @@
 // on a given AudioContext and output node, so the same code runs live or in an offline render.
 //
 //   blue — "Messenger": synthwave in A Phrygian dominant (the Mediterranean scale).
-//   red  — "Spartan": an original choral-orchestral piece in D Phrygian played on real
+//   red  — "Spartan": an original choral-orchestral piece in F# Phrygian played on real
 //          recordings (public/audio/spartan — CC0 VSCO 2 orchestra + CC0 Freesound choirs):
-//          a dark-ambient lament (solo violin, low strings, "ooh" choir, heartbeat timpani),
-//          then full choir, horns, trombones, tuba, driving cellos and war drums.
+//          a choir-led opening over a held F# (ison), a drum-driven drop with the choir
+//          receding, a quiet choral breath, then a heavy climax of low choir, brass and drums.
 //
 // createTrack(name, ctx, out, opts) → { ready, stepDur, loopSteps, level, play(step, time) }
 // `ready` resolves once any samples are loaded; play() is called once per 16th note, slightly
@@ -207,33 +207,51 @@ function fit(n, lo, hi) {
 }
 
 function spartan(ctx, out, { loadSample = fetchSample } = {}) {
-  const BPM = 66;
+  const BPM = 63;
   const STEP = 60 / BPM / 4;
-  const SECTION = 8 * 16; // A: lament (bars 1–8), B: full orchestra (bars 9–16)
+  const BAR = STEP * 16;
 
-  // D Phrygian (D Eb F G A Bb C). The Eb → Dm cadence at the end of each half is the
-  // "ancient", Eastern-Mediterranean colour.
-  const DM = [38, 41, 45], EB = [39, 43, 46], CM = [36, 39, 43], BB = [34, 38, 41];
-  const PROG = [DM, EB, DM, CM, BB, CM, EB, DM]; // [root, third, fifth]
+  // Four sections (in bars), following the shape of a cinematic choral piece:
+  //   choir  — a strong choir carries the melody alone: no bass, no drums
+  //   drive  — the drums drop and the beat picks up; low brass/strings enter; choir recedes
+  //   breath — back to the choir alone, softer
+  //   climax — loudest: heavy drums every bar, low brass, deep choir + horns on the main line
+  // then it cuts off and loops to the choir.
+  const SECTIONS = [["choir", 8], ["drive", 8], ["breath", 4], ["climax", 12]];
+  const STARTS = [];
+  SECTIONS.reduce((bar, [, len]) => (STARTS.push(bar), bar + len), 0);
+  const TOTAL_BARS = SECTIONS.reduce((n, [, len]) => n + len, 0);
+  const sectionAt = (bar) => {
+    for (let k = SECTIONS.length - 1; k >= 0; k--) if (bar >= STARTS[k]) return { name: SECTIONS[k][0], at: bar - STARTS[k], len: SECTIONS[k][1] };
+  };
 
-  // [step within the section, MIDI note, length in steps]
-  const LAMENT = [ // solo violin, section A
-    [0, 69, 8], [8, 74, 8], [16, 75, 12], [28, 74, 4], [32, 77, 8], [40, 75, 4], [44, 74, 4],
-    [48, 72, 16], [64, 74, 8], [72, 77, 8], [80, 79, 6], [86, 77, 2], [88, 75, 8],
-    [96, 75, 4], [100, 74, 4], [104, 72, 4], [108, 70, 4], [112, 69, 16],
+  // F# Phrygian (F# G A B C# D E) — the flat second (G) gives the ancient, Eastern-Mediterranean
+  // edge. Eight-bar progression: F#m → G → F#m → Em → D → Em → G → F#m.
+  const FSM = [42, 45, 49], G = [43, 47, 50], EM = [40, 43, 47], D = [38, 42, 45];
+  const PROG = [FSM, G, FSM, EM, D, EM, G, FSM]; // [root, third, fifth]
+
+  // [step within an 8-bar phrase, MIDI note, length in steps] — original lines.
+  const CHANT = [ // the choir's melody (choir + viola an octave up)
+    [0, 49, 8], [8, 54, 8], [16, 55, 12], [28, 54, 4], [32, 57, 8], [40, 55, 4], [44, 54, 4],
+    [48, 52, 16], [64, 54, 8], [72, 57, 8], [80, 59, 6], [86, 57, 2], [88, 55, 8],
+    [96, 55, 4], [100, 54, 4], [104, 52, 4], [108, 50, 4], [112, 49, 16],
   ];
-  const ANTHEM = [ // horns (an octave down) + violins, section B
-    [0, 62, 8], [8, 57, 8], [16, 58, 16], [32, 57, 8], [40, 62, 8], [48, 63, 8], [56, 62, 4],
-    [60, 60, 4], [64, 62, 16], [80, 63, 8], [88, 67, 8], [96, 67, 8], [104, 65, 4], [108, 63, 4],
-    [112, 62, 16],
+  const ANTHEM = [ // climax line: horns + choir, violins an octave up
+    [0, 54, 8], [8, 49, 8], [16, 50, 16], [32, 49, 8], [40, 54, 8], [48, 55, 8], [56, 54, 4],
+    [60, 52, 4], [64, 54, 16], [80, 55, 8], [88, 59, 8], [96, 59, 8], [104, 57, 4], [108, 55, 4],
+    [112, 54, 16],
   ];
   const OSTINATO = [0, 0, 2, 0, 0, 0, 1, 2]; // cello spiccato 8ths, as chord-tone indices
+
+  // All parts mix into one bus (peaks are caught by the master limiter in audio.js).
+  const bus = ctx.createGain();
+  bus.connect(out);
 
   const reverb = ctx.createConvolver();
   reverb.buffer = resources(ctx).ir;
   const wet = ctx.createGain();
-  wet.gain.value = 0.35;
-  reverb.connect(wet).connect(out);
+  wet.gain.value = 0.4;
+  reverb.connect(wet).connect(bus);
 
   const buffers = {};
   const ready = Promise.all(
@@ -246,7 +264,7 @@ function spartan(ctx, out, { loadSample = fetchSample } = {}) {
   );
 
   // Play `group` at `midi` (nearest sample, repitched), or an unpitched hit when midi is null.
-  function play(group, midi, t, { gain = 1, swellTo = null, dur = null, attack = 0.01, release = 0.5, send = 0.4, variant = 0 } = {}) {
+  function play(group, midi, t, { gain = 1, swellTo = null, dur = null, attack = 0.01, release = 0.5, send = 0.4, variant = 0, bright = false } = {}) {
     const set = SPARTAN_SAMPLES[group];
     let name, rate = 1;
     if (midi == null) {
@@ -272,7 +290,17 @@ function spartan(ctx, out, { loadSample = fetchSample } = {}) {
       g.gain.linearRampToValueAtTime(0, t + dur + release);
       src.stop(t + dur + release + 0.05);
     }
-    src.connect(g).connect(out);
+    if (bright) {
+      // Lift the presence range so the choir rings out rather than sounding muffled.
+      const shelf = ctx.createBiquadFilter();
+      shelf.type = "highshelf";
+      shelf.frequency.value = 1800;
+      shelf.gain.value = 9;
+      src.connect(shelf).connect(g);
+    } else {
+      src.connect(g);
+    }
+    g.connect(bus);
     if (send > 0) {
       const s = ctx.createGain();
       s.gain.value = send;
@@ -280,105 +308,136 @@ function spartan(ctx, out, { loadSample = fetchSample } = {}) {
     }
   }
 
-  const BAR = STEP * 16;
   const timp = (midi, t, gain) => play("timpani", fit(midi, 31, 40), t, { gain, send: 0.5 });
+  const sustain = { dur: BAR, release: 0.9 };
 
-  // One bar of sustained strings (re-voiced each bar; overlapping releases keep it legato).
-  function strings(chord, t, full) {
-    const [root, third, fifth] = chord;
-    const opts = { dur: BAR, attack: 0.35, release: 0.7, send: 0.45 };
-    play("bass_sus", fit(root, 31, 43), t, { ...opts, gain: full ? 0.55 : 0.45 });
-    play("cello_sus", fit(root, 48, 59), t, { ...opts, gain: full ? 0.4 : 0.32 });
-    play("cello_sus", fit(fifth, 52, 63), t, { ...opts, gain: full ? 0.3 : 0.22 });
-    play("viola_sus", fit(third, 60, 71), t, { ...opts, gain: full ? 0.28 : 0.18 });
-    if (full) {
-      play("violins_sus", fit(fifth, 69, 80), t, { ...opts, gain: 0.14 });
-      play("violins_sus", fit(third, 72, 83), t, { ...opts, gain: 0.1 });
+  // Choir chord for one bar. `level` scales it: 1 = carrying the piece, ~0.35 = background.
+  // `low` puts the weight in the deep voices (climax).
+  function choirChord([root, third, fifth], t, level, low = false) {
+    const o = { ...sustain, attack: 0.5, send: 0.75, bright: true };
+    // Ison: part of the choir holds the home note (F#) under every chord, as Byzantine choirs do.
+    play("choir_ahh", 54, t, { ...o, gain: 0.32 * level });
+    if (low) {
+      play("choir_ooh", fit(root, 42, 49), t, { ...o, gain: 0.6 * level });
+      play("choir_ahh", fit(root, 47, 55), t, { ...o, gain: 0.55 * level });
+      play("choir_ahh", fit(fifth, 47, 55), t, { ...o, gain: 0.45 * level });
+      play("choir_ahh", fit(third, 50, 58), t, { ...o, gain: 0.3 * level });
+    } else {
+      play("choir_ahh", fit(root, 50, 58), t, { ...o, gain: 0.5 * level });
+      play("choir_ahh", fit(fifth, 50, 58), t, { ...o, gain: 0.42 * level });
+      play("choir_ahh", fit(third, 52, 60), t, { ...o, gain: 0.34 * level });
     }
   }
+  // A melody note sung by the choir — "ahh" for most of the range, "ooh" for the lowest notes.
+  const sing = (note, t, steps, gain) =>
+    play(note >= 48 ? "choir_ahh" : "choir_ooh", note, t, { gain, dur: steps * STEP, attack: 0.12, release: 0.9, send: 0.7, bright: true });
+  // Soft high strings on the chord — the upper shimmer above the choir.
+  const highStrings = ([, third, fifth], t, gain) => {
+    play("violins_sus", fit(fifth, 66, 78), t, { ...sustain, attack: 0.4, send: 0.5, gain });
+    play("violins_sus", fit(third, 70, 81), t, { ...sustain, attack: 0.4, send: 0.5, gain: gain * 0.8 });
+  };
 
-  // Choir: a low "ooh" through the lament with the "ahh" rising in from bar 5; the full
-  // "ahh" chord (root, fifth, third) through B.
-  function choir(chord, bar, t, full) {
-    const [root, third, fifth] = chord;
-    const opts = { dur: BAR, attack: full ? 0.4 : 0.9, release: 1.0, send: 0.7 };
-    if (!full) {
-      play("choir_ooh", fit(root, 43, 52), t, { ...opts, gain: 0.5 });
-      play("choir_ooh", fit(fifth, 43, 52), t, { ...opts, gain: 0.32 });
-      if (bar >= 4) {
-        const swell = { ...opts, attack: 1.4, send: 0.8 };
-        play("choir_ahh", fit(root, 49, 58), t, { ...swell, gain: 0.22 + 0.04 * (bar - 4) });
-        play("choir_ahh", fit(fifth, 49, 58), t, { ...swell, gain: 0.16 + 0.03 * (bar - 4) });
-      }
-      return;
-    }
-    play("choir_ooh", fit(root, 43, 52), t, { ...opts, gain: 0.45 });
-    play("choir_ahh", fit(root, 49, 58), t, { ...opts, gain: 0.6 });
-    play("choir_ahh", fit(fifth, 49, 58), t, { ...opts, gain: 0.5 });
-    play("choir_ahh", fit(third, 49, 58), t, { ...opts, gain: 0.38 });
+  function lowStrings([root, , fifth], t, gain) {
+    play("bass_sus", 42, t, { ...sustain, attack: 0.3, send: 0.4, gain: 0.55 * gain }); // F# pedal under every chord
+    play("cello_sus", fit(root, 48, 59), t, { ...sustain, attack: 0.3, send: 0.4, gain: 0.4 * gain });
+    play("cello_sus", fit(fifth, 52, 63), t, { ...sustain, attack: 0.3, send: 0.4, gain: 0.3 * gain });
+  }
+  function lowBrass([root, , fifth], t, gain) {
+    const o = { dur: BAR - STEP, attack: 0.1, release: 0.5, send: 0.5 };
+    play("tuba", fit(root, 34, 46), t, { ...o, gain: 0.55 * gain });
+    play("trombone", fit(root, 42, 53), t, { ...o, gain: 0.36 * gain });
+    play("trombone", fit(fifth, 45, 56), t, { ...o, gain: 0.3 * gain });
   }
 
-  // The choir carries the B melody an octave below the horns/violins — "ahh" for most of it,
-  // the lower "ooh" voices for the bottom notes so neither sample is stretched too far.
-  const sing = (note, t, steps) =>
-    play(note >= 49 ? "choir_ahh" : "choir_ooh", note, t, { gain: 0.5, dur: steps * STEP, attack: 0.15, release: 0.8, send: 0.65 });
-
-  function brass(chord, t) {
-    const [root, , fifth] = chord;
-    const opts = { dur: BAR - STEP, attack: 0.12, release: 0.5, send: 0.5 };
-    play("tuba", fit(root, 34, 46), t, { ...opts, gain: 0.5 });
-    play("trombone", fit(root, 46, 57), t, { ...opts, gain: 0.32 });
-    play("trombone", fit(fifth, 48, 59), t, { ...opts, gain: 0.26 });
+  // Driving percussion. `heavy` for the climax.
+  function drums(chord, s, t, heavy, k) {
+    if (s === 0) play("bassdrum", null, t, { gain: 0.95 * k, send: 0.5, variant: 0 });
+    if (s === 8) play("bassdrum", null, t, { gain: 0.7 * k, send: 0.5, variant: 1 });
+    if (heavy && (s === 6 || s === 14)) play("bassdrum", null, t, { gain: 0.45, send: 0.5, variant: 1 });
+    const pattern = { 0: 1, 3: 0.5, 6: 0.6, 8: 0.85, 10: 0.45, 11: 0.5, 12: 0.7, 14: 0.6, 15: 0.4 };
+    if (pattern[s]) timp(s === 8 || s === 12 ? chord[2] : chord[0], t, pattern[s] * k);
+    if (s % 2 === 0) {
+      play("cello_spic", fit(chord[OSTINATO[s / 2]], 45, 57), t, { gain: (s === 0 ? 0.5 : 0.36) * k, dur: STEP * 1.2, release: 0.1, send: 0.15 });
+    }
   }
 
   return {
     ready,
     stepDur: STEP,
-    loopSteps: SECTION * 2,
-    level: 0.45,
+    loopSteps: TOTAL_BARS * 16,
+    level: 0.3,
     play(i, t) {
-      const inB = i >= SECTION;
-      const k = i % SECTION; // step within the section
-      const bar = Math.floor(k / 16), s = k % 16;
-      const chord = PROG[bar];
+      const bar = Math.floor(i / 16), s = i % 16;
+      const sec = sectionAt(bar);
+      // Phrases restart with each section, so every section enters on the home chord with
+      // its melody from the top; the final bar of the piece resolves home before the loop.
+      const phraseBar = sec.at % 8;
+      const finalBar = sec.name === "climax" && sec.at === sec.len - 1;
+      const chord = finalBar ? FSM : PROG[phraseBar];
+      const k = phraseBar * 16 + s; // position in the 8-bar phrase, for the melodies
+      const line = (notes) => notes.find(([at]) => at === k);
 
-      if (s === 0) strings(chord, t, inB);
-      if (s === 0 && (inB || bar >= 1)) choir(chord, bar, t, inB);
-
-      if (!inB) {
-        // A — lament: heartbeat timpani, solo violin.
-        if (k === 0) play("gong", null, t, { gain: 0.35, send: 0.6 });
-        if (s === 0) timp(chord[0], t, 0.75);
-        if (s === 3 && bar >= 2) timp(chord[0], t, 0.4);
-        const n = LAMENT.find(([at]) => at === k);
-        if (n) play("violin_solo", n[1], t, { gain: 0.42, dur: n[2] * STEP, attack: 0.12, release: 0.6, send: 0.55 });
-      } else {
-        // B — full orchestra.
-        if (k === 0) play("gong", null, t, { gain: 0.6, send: 0.6 });
-        if (s === 0) brass(chord, t);
-        const n = ANTHEM.find(([at]) => at === k);
+      if (sec.name === "choir" || sec.name === "breath") {
+        // Deliberately well below the drop and climax — the contrast is what makes them land.
+        const level = sec.name === "choir" ? 0.6 : 0.42;
+        if (s === 0) {
+          choirChord(chord, t, level);
+          highStrings(chord, t, 0.32 * level);
+        }
+        const n = line(CHANT);
         if (n) {
-          const opts = { dur: n[2] * STEP, attack: 0.1, release: 0.5, send: 0.5 };
-          play("horn", n[1] - 12, t, { ...opts, gain: 0.45 });
-          play("violins_sus", n[1], t, { ...opts, gain: 0.22 });
-          sing(n[1] - 12, t, n[2]);
+          const o = { dur: n[2] * STEP, attack: 0.2, release: 0.8, send: 0.6 };
+          sing(n[1], t, n[2], 0.6 * level);
+          play("viola_sus", n[1] + 12, t, { ...o, gain: 0.16 * level });
+          play("violins_sus", n[1] + 24, t, { ...o, gain: 0.2 * level }); // the bright top of the line
         }
-        if (s % 2 === 0) {
-          play("cello_spic", fit(chord[OSTINATO[s / 2]], 45, 57), t, { gain: s === 0 ? 0.5 : 0.36, dur: STEP * 1.2, release: 0.1, send: 0.15 });
+      } else if (sec.name === "drive") {
+        if (s === 0) {
+          if (sec.at === 0) play("gong", null, t, { gain: 0.5, send: 0.6 });
+          choirChord(chord, t, 0.35);
+          lowStrings(chord, t, 1.3);
+          highStrings(chord, t, 0.22);
+          if (sec.at % 2 === 0) lowBrass(chord, t, 1.15);
+          // horns answer with a swelling chord every other bar
+          if (sec.at % 2 === 1) for (const n of [chord[0], chord[2]]) play("horn", fit(n, 50, 60), t, { gain: 0.32, dur: BAR, attack: 0.6, release: 0.6, send: 0.5 });
         }
-        if (s === 0) play("bassdrum", null, t, { gain: 0.85, send: 0.5, variant: 0 });
-        if (s === 10) play("bassdrum", null, t, { gain: 0.5, send: 0.5, variant: 1 });
-        const hits = { 0: 1, 3: 0.45, 6: 0.6, 8: 0.85, 11: 0.45, 14: 0.65 };
-        if (hits[s] && bar < 7) timp(s === 8 ? chord[2] : chord[0], t, hits[s]);
-        if (bar === 7) {
-          // Last bar: timpani roll swelling into the return of the lament.
-          if (s === 0) play("timpani_roll", fit(chord[0], 31, 40), t, { gain: 0.2, swellTo: 0.85, dur: BAR - 0.1, attack: 0.05, release: 0.3, send: 0.5 });
-          if (s === 12 || s === 14) timp(chord[0], t, 0.7 + s * 0.02);
+        drums(chord, s, t, false, 1.2);
+      } else if (sec.name === "climax") {
+        const last = sec.at === sec.len - 1;
+        if (s === 0) {
+          if (sec.at === 0) play("gong", null, t, { gain: 0.75, send: 0.6 });
+          // the brass keeps building through the final bars
+          const build = sec.at >= sec.len - 5 ? 1.7 : 1.35;
+          choirChord(chord, t, 1.1, true);
+          lowStrings(chord, t, 1.45);
+          lowBrass(chord, t, build);
+          highStrings(chord, t, 0.38);
+        }
+        const n = line(ANTHEM);
+        if (n && !last) {
+          const o = { dur: n[2] * STEP, attack: 0.1, release: 0.5, send: 0.5 };
+          play("horn", n[1], t, { ...o, gain: 0.55 });
+          sing(n[1], t, n[2], 0.5);
+          play("violins_sus", n[1] + 12, t, { ...o, gain: 0.42 });
+          play("violins_sus", n[1] + 24, t, { ...o, gain: 0.18 });
+        }
+        if (!last) drums(chord, s, t, true, 1.6);
+        else if (s === 0) {
+          // final hit, then silence before the choir returns
+          play("bassdrum", null, t, { gain: 1, send: 0.7 });
+          timp(chord[0], t, 1);
+          play("gong", null, t, { gain: 0.5, send: 0.7 });
         }
       }
 
-      // Cymbal swell timed to peak exactly on the B downbeat.
-      if (i === SECTION - Math.round(CYMBAL_PEAK / STEP)) play("cymbal_cresc", null, t, { gain: 0.45, send: 0.6 });
+      // Cymbal swells timed to peak on the drop and on the climax downbeat.
+      for (const target of [STARTS[1], STARTS[3]]) {
+        if (i === target * 16 - Math.round(CYMBAL_PEAK / STEP)) play("cymbal_cresc", null, t, { gain: 0.45, send: 0.6 });
+      }
+      // Timpani roll building through the bar before the climax.
+      if (bar === STARTS[3] - 1 && s === 0) {
+        play("timpani_roll", fit(chord[0], 31, 40), t, { gain: 0.15, swellTo: 0.8, dur: BAR - 0.1, attack: 0.05, release: 0.3, send: 0.5 });
+      }
     },
   };
 }

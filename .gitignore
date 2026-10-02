@@ -11,3 +11,6 @@ vite.config.js.timestamp-*
 
 # Your personal 3D body scan — public/ is served publicly once deployed
 public/models/me.glb
+
+# Reference audio for analysis only — copyrighted, never commit or deploy
+private-audio/
