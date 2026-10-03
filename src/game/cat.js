@@ -13,6 +13,7 @@
 // lower leg; Head/Neck X turns the head sideways, Z tilts it up; tail X curls sideways, Z up/down.
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { musicClock } from "./audio.js";
 
 const URL = "/models/cat.glb";
 const HEIGHT = 0.36;       // standing height to ear tips, metres (the figure is 1.8 m)
@@ -40,6 +41,15 @@ const SIT_POSE = {
   Head: { z: -0.5 }, Neck: { z: -0.15 }, tail1: { z: 1.3 }, tail2: { z: 0.4 }, tail3: { x: 0.6 }, tail4: { x: 0.6 },
 };
 const SIT_PITCH = 0.5;
+
+// Dancing: up on the hind legs (body tilted ~70° nose-up, hind legs counter-rotated to stay
+// vertical, head levelled to look ahead). The moves are layered on top in update().
+const DANCE_POSE = {
+  L_BLeg_Upper: { z: -1.25 }, R_BLeg_Upper: { z: -1.25 }, L_BLeg_Lower: { z: 0.3 }, R_BLeg_Lower: { z: 0.3 },
+  Head: { z: -1.0 }, Neck: { z: -0.2 }, tail1: { z: 1.2 },
+};
+const DANCE_PITCH = 1.25;
+const FRONT = Math.PI / 2; // the spot on the circle nearest the camera
 
 const rand = (a, b) => a + Math.random() * (b - a);
 const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
@@ -70,7 +80,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
   shadow.position.y = 0.003;
   root.add(shadow);
 
-  let bones = null, rest = null, legLen = 0.15, sitDrop = 0, disposed = false, model = null;
+  let bones = null, rest = null, legLen = 0.15, sitDrop = 0, danceDrop = 0, disposed = false, model = null;
   const q = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
 
   new GLTFLoader().load(URL, (gltf) => {
@@ -122,6 +132,10 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     pivot.rotation.z = SIT_PITCH;
     pivot.updateMatrixWorld(true);
     sitDrop = -new THREE.Box3().setFromObject(model, true).min.y;
+    applyPose({ dance: 1 });
+    pivot.rotation.z = DANCE_PITCH;
+    pivot.updateMatrixWorld(true);
+    danceDrop = -new THREE.Box3().setFromObject(model, true).min.y;
     pivot.rotation.z = 0;
     applyPose({});
   });
@@ -132,9 +146,13 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     const a = (angles[bone] ||= { x: 0, z: 0 });
     a[axis] += v;
   }
-  function applyPose({ sit = 0 } = {}) {
+  function addPose(pose, w) {
+    if (w) for (const [n, a] of Object.entries(pose)) for (const k in a) add(n, k, a[k] * w);
+  }
+  function applyPose({ sit = 0, dance = 0 } = {}) {
     for (const n of BONES) angles[n] = { x: 0, z: 0 };
-    if (sit) for (const [n, a] of Object.entries(SIT_POSE)) for (const k in a) add(n, k, a[k] * sit);
+    addPose(SIT_POSE, sit);
+    addPose(DANCE_POSE, dance);
     commit();
   }
   function commit() {
@@ -151,7 +169,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
   let heading = 0;
   let tasks = [];
   let task = null, taskTime = 0;
-  let gaitPhase = 0, sitW = 0, sitTarget = 0, trotW = 0;
+  let gaitPhase = 0, sitW = 0, sitTarget = 0, trotW = 0, danceW = 0, visitsSinceDance = 2;
   let headYaw = 0, headPitch = 0, lookTimer = 0, lookYaw = 0, lookPitch = 0;
   let flick = 0, flickTimer = rand(2, 5), t = 0;
 
@@ -163,6 +181,44 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     const pts = [], steps = Math.max(2, Math.ceil(Math.abs(a1 - a0) / 0.25));
     for (let i = 0; i <= steps; i++) pts.push(onCircle(a0 + ((a1 - a0) * i) / steps));
     return pts;
+  }
+
+  // Round to the front of the pedestal from angle `fromA`, face the camera, dance, then leave.
+  function dancePlan(fromA, gait, dur, hurry = false) {
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const toFront = fromA + wrapAngle(FRONT - fromA);
+    const away = FRONT + dir * rand(0.9, 1.6);
+    const [dx, dz] = OFFSTAGE.reduce((best, p) =>
+      Math.abs(wrapAngle(angleOf(...p) - away)) < Math.abs(wrapAngle(angleOf(...best) - away)) ? p : best);
+    return [
+      { type: "go", path: [onCircle(fromA), ...arcPoints(fromA, toFront)], gait, hurry },
+      { type: "face", heading: FRONT, dur: 3 },
+      { type: "stand", dur: hurry ? 0.2 : 0.6 },
+      { type: "dance", dur },
+      { type: "stand", dur: rand(1, 2) },
+      { type: "go", path: [...arcPoints(FRONT, away), new THREE.Vector2(dx, dz)], gait: "walk" },
+      { type: "away", dur: rand(4, 10) },
+    ];
+  }
+
+  // The secret toggle: dance now (hurrying over from wherever it is), or stop if dancing.
+  function toggleDance() {
+    if (reduceMotion || !bones) return;
+    if (task?.type === "dance") {
+      task.dur = 0; // finish now → stands, then wanders off as usual
+      return;
+    }
+    if (task?.type === "face" || tasks.some((x) => x.type === "dance")) return; // already on its way
+    if (!root.visible) {
+      // Appear from the nearer front side of the stage.
+      const [sx, sz] = pick([[-4.5, 2.4], [4.5, 2.4]]);
+      pos.set(sx, sz);
+      heading = Math.atan2(-sz, -sx);
+      root.visible = true;
+    }
+    visitsSinceDance = 0;
+    tasks = dancePlan(angleOf(pos.x, pos.y), "trot", 20, true);
+    task = null; // pick up the new plan on the next frame
   }
 
   function planVisit() {
@@ -178,6 +234,15 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     pos.set(sx, sz);
     heading = Math.atan2(-sz, -sx);
     root.visible = true;
+
+    // Every so often (and at least every fourth visit): come round to the front, face the
+    // camera, stand up on the hind legs and dance.
+    if (!reduceMotion && (visitsSinceDance >= 3 || Math.random() < 0.3)) {
+      visitsSinceDance = 0;
+      return dancePlan(enterA, trot ? "trot" : "walk", rand(7, 9));
+    }
+    visitsSinceDance++;
+
     const plan = [
       { type: "go", path: [onCircle(enterA), ...arcPoints(enterA, midA)], gait: trot ? "trot" : "walk" },
       { type: "stand", dur: rand(1.8, 3.5) },
@@ -221,19 +286,28 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     if (task.type === "go") {
       // Wait to stand up fully before walking off.
       const gait = task.gait === "trot" ? TROT : WALK;
-      while (task.path.length && pos.distanceTo(task.path[0]) < 0.12) task.path.shift();
+      // A faster cat can't turn as tightly, so it counts a waypoint as reached from further out
+      // (otherwise it can end up circling one forever).
+      const reach = Math.max(0.12, vel.speed * 0.3);
+      while (task.path.length && pos.distanceTo(task.path[0]) < reach) task.path.shift();
       if (!task.path.length) {
         nextTask();
       } else if (sitW < 0.15) {
         const tgt = task.path[0];
         const desired = Math.atan2(tgt.y - pos.y, tgt.x - pos.x);
         const turn = wrapAngle(desired - heading);
-        const maxTurn = (task.gait === "trot" ? 3 : 2.4) * dt;
+        const maxTurn = (task.hurry ? 4.5 : task.gait === "trot" ? 3 : 2.4) * dt;
         heading += Math.max(-maxTurn, Math.min(maxTurn, turn));
         // Slow down for sharp turns, like a real animal.
-        targetSpeed = gait.speed * (1 - Math.min(0.7, Math.abs(turn) / Math.PI));
+        targetSpeed = gait.speed * (task.hurry ? 1.6 : 1) * (1 - Math.min(0.7, Math.abs(turn) / Math.PI));
       }
-    } else if (task.type === "stand" || task.type === "sit" || task.type === "away") {
+    } else if (task.type === "face") {
+      // Turn on the spot (stepping in place) until facing the target direction.
+      const turn = wrapAngle(task.heading - heading);
+      const maxTurn = 2.2 * dt;
+      heading += Math.max(-maxTurn, Math.min(maxTurn, turn));
+      if (Math.abs(turn) < 0.03 || taskTime > task.dur) nextTask();
+    } else if (task.type === "stand" || task.type === "sit" || task.type === "away" || task.type === "dance") {
       if (taskTime > task.dur) nextTask();
     }
 
@@ -241,6 +315,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     pos.x += Math.cos(heading) * vel.speed * dt;
     pos.y += Math.sin(heading) * vel.speed * dt;
     sitW = smooth(sitW, sitTarget, sitTarget ? 2.2 : 3, dt);
+    danceW = smooth(danceW, task.type === "dance" ? 1 : 0, 3.5, dt);
     trotW = smooth(trotW, task.gait === "trot" ? 1 : 0, 3, dt);
 
     root.position.set(pos.x, 0, pos.y);
@@ -251,8 +326,10 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     const amp = THREE.MathUtils.lerp(WALK.amp, TROT.amp, trotW);
     const duty = THREE.MathUtils.lerp(WALK.duty, TROT.duty, trotW);
     // paw travels 2·amp·legLen during stance, which lasts duty/f → f = v·duty / (2·amp·legLen)
-    gaitPhase = (gaitPhase + (speed * duty) / (2 * amp * legLen) * dt) % 1;
-    const moveW = Math.min(1, speed / (WALK.speed * 0.6));
+    // Turning on the spot still steps the feet.
+    const stepSpeed = task.type === "face" ? Math.max(speed, WALK.speed * 0.45) : speed;
+    gaitPhase = (gaitPhase + (stepSpeed * duty) / (2 * amp * legLen) * dt) % 1;
+    const moveW = Math.min(1, stepSpeed / (WALK.speed * 0.6));
 
     for (const n of BONES) angles[n] = { x: 0, z: 0 };
     for (const leg of LEGS) {
@@ -270,10 +347,54 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     // body bob: lowest twice per stride
     const bob = -Math.abs(Math.sin(gaitPhase * Math.PI * 2)) * 0.006 * moveW;
 
-    // ---- sit blend
-    for (const [n, a] of Object.entries(SIT_POSE)) for (const k in a) add(n, k, a[k] * sitW);
-    pivot.rotation.z = SIT_PITCH * sitW;
-    pivot.position.y = sitDrop * sitW + bob;
+    // ---- sit / dance blend
+    addPose(SIT_POSE, sitW);
+    addPose(DANCE_POSE, danceW);
+    // The dance is the Gangnam Style "horse dance", on the music's beat when it's playing
+    // (double-time for the slow red track; ~132 BPM otherwise, the song's own tempo).
+    let beat = t * 2.2, bounce = 0, sway = 0;
+    if (danceW > 0.01) {
+      const clock = musicClock();
+      if (clock) beat = clock.beat * (clock.bpm < 90 ? 2 : 1);
+      const w = danceW;
+      const p = beat - Math.floor(beat);            // position within the beat
+      const lead = Math.floor(beat) % 2 ? 1 : -1;   // which hind leg comes up this beat (+1 = left)
+      const lift = Math.sin(Math.PI * p);           // knee up then down within the beat
+      bounce = Math.abs(Math.sin(Math.PI * 2 * p)); // two little hops per beat
+      sway = Math.sin(Math.PI * beat);
+      const lasso = Math.floor(beat / 8) % 2 === 1; // every other 8 beats, swing the lasso
+
+      // Gallop step: the lifted knee comes up and forward; the standing leg flexes on each hop.
+      for (const [side, upper, lower, foot] of [[1, "L_BLeg_Upper", "L_BLeg_Lower", "L_BFoot"], [-1, "R_BLeg_Upper", "R_BLeg_Lower", "R_BFoot"]]) {
+        const up = side === lead ? lift : 0;
+        add(upper, "z", 0.75 * up * w);
+        add(lower, "z", (0.9 * up + 0.2 * bounce) * w);
+        add(foot, "z", -0.4 * up * w);
+      }
+      // Reins: paws held together out front, bouncing with the hops.
+      const rein = 0.07 * Math.sin(Math.PI * 2 * p);
+      add("L_Leg_Upper", "z", (0.55 + rein) * w);
+      add("L_Leg_Upper", "x", -0.25 * w);
+      add("L_Leg_Lower", "z", -0.5 * w);
+      if (!lasso) {
+        add("R_Leg_Upper", "z", (0.55 + rein) * w);
+        add("R_Leg_Upper", "x", 0.25 * w);
+        add("R_Leg_Lower", "z", -0.5 * w);
+      } else {
+        // Lasso: right paw raised overhead, circling once per beat.
+        const c = Math.PI * 2 * beat;
+        add("R_Leg_Upper", "z", (2.3 + 0.3 * Math.cos(c)) * w);
+        add("R_Leg_Upper", "x", (-0.45 + 0.4 * Math.sin(c)) * w);
+        add("R_Leg_Lower", "z", -0.15 * w);
+      }
+      // Head: leaned back a touch, nodding on the hops.
+      add("Head", "z", (0.12 + 0.08 * Math.sin(Math.PI * 2 * p)) * w);
+      add("Head", "x", 0.1 * sway * w);
+      ["tail2", "tail3", "tail4"].forEach((n, i) => add(n, "x", 0.4 * Math.sin(Math.PI * beat - i * 0.7) * w));
+    }
+    pivot.rotation.z = SIT_PITCH * sitW + DANCE_PITCH * danceW;
+    pivot.rotation.x = 0.07 * sway * danceW; // slight side-to-side rock
+    pivot.position.y = sitDrop * sitW + danceDrop * danceW + 0.02 * bounce * danceW + bob;
 
     // ---- head: glance around, often at the camera; steadier while walking
     lookTimer -= dt;
@@ -286,6 +407,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
       lookPitch = atCamera ? 0.12 : rand(-0.15, 0.25);
       if (speed > 0.05) lookYaw *= 0.4;
     }
+    if (danceW > 0.5) lookYaw = lookPitch = 0; // eyes front while dancing
     headYaw = smooth(headYaw, THREE.MathUtils.clamp(lookYaw, -1.0, 1.0), 4, dt);
     headPitch = smooth(headPitch, lookPitch, 3, dt);
     add("Neck", "x", headYaw * 0.4);
@@ -309,7 +431,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
   if (import.meta.env?.DEV) {
     window.__cat = {
       get state() {
-        return { loaded: !!bones, visible: root.visible, task: task?.type, left: task?.path?.length, x: +pos.x.toFixed(2), z: +pos.y.toFixed(2), speed: +vel.speed.toFixed(2), sit: +sitW.toFixed(2) };
+        return { loaded: !!bones, visible: root.visible, task: task?.type, left: task?.path?.length, x: +pos.x.toFixed(2), z: +pos.y.toFixed(2), speed: +vel.speed.toFixed(2), sit: +sitW.toFixed(2), t: +t.toFixed(3) };
       },
       root,
       // Fast-forward the simulation, e.g. until a condition on state holds.
@@ -339,6 +461,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
 
   return {
     update,
+    toggleDance,
     dispose() {
       disposed = true;
       scene.remove(root);

@@ -3,7 +3,7 @@ import { createArena } from "./scene.js";
 
 // Full-viewport WebGL canvas behind the app. The figure is framed on `stageRef`'s box, so it
 // sits in the gap between the menu and the panel and follows layout changes.
-export default function Arena({ stageRef, onModel, mode }) {
+export default function Arena({ stageRef, onModel, mode, danceSignal = 0 }) {
   const canvasRef = useRef(null);
   const arenaRef = useRef(null);
   const modeRef = useRef(mode);
@@ -46,6 +46,11 @@ export default function Arena({ stageRef, onModel, mode }) {
   useEffect(() => {
     arenaRef.current?.setMode(mode);
   }, [mode]);
+
+  // Each bump of danceSignal toggles the cat's dance (the secret tap on the player name).
+  useEffect(() => {
+    if (danceSignal) arenaRef.current?.toggleCatDance();
+  }, [danceSignal]);
 
   return <canvas ref={canvasRef} className="arena-canvas" aria-hidden="true" />;
 }

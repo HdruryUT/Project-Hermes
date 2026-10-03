@@ -609,6 +609,7 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
   return {
     setFocus,
     setMode,
+    toggleCatDance: () => cat.toggleDance(),
     dispose() {
       disposed = true;
       cancelAnimationFrame(raf);

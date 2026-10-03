@@ -87,6 +87,7 @@ function start(name) {
       if (p.timer) return;
       p.step = 0;
       p.nextTime = ctx.currentTime + 0.08;
+      p.t0 = p.nextTime; // when beat 0 sounds, for musicClock()
       p.timer = setInterval(() => tick(p), 25);
       tick(p);
     },
@@ -147,6 +148,16 @@ export function setSoundEnabled(on) {
   ctx.resume().catch(() => {});
   if (ctx.state !== "running") resumeOnGesture();
   start(current);
+}
+
+// The beat of whatever is playing, so things can move in time with it:
+// { bpm, beat } where beat counts up continuously (1 per beat), or null when nothing plays.
+export function musicClock() {
+  if (!enabled || !ctx || ctx.state !== "running") return null;
+  const p = players[current];
+  if (!p?.timer) return null;
+  const beatDur = p.track.stepDur * 4;
+  return { bpm: 60 / beatDur, beat: (ctx.currentTime - p.t0) / beatDur };
 }
 
 // Switch soundtrack ("blue" | "red"), crossfading if music is playing.

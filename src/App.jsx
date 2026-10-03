@@ -78,6 +78,7 @@ export default function App() {
   const [sound, setSound] = useLocalStorage("orca.sound", false);
   const [mode, setMode] = useLocalStorage("orca.mode", "blue");
   const [hasScan, setHasScan] = useState(false);
+  const [danceSignal, setDanceSignal] = useState(0); // secret: tap the player name
   const stageRef = useRef(null);
   const panelRef = useRef(null);
   const menuRefs = useRef([]);
@@ -149,7 +150,7 @@ export default function App() {
   return (
     <div className="game">
       <Suspense fallback={null}>
-        <Arena stageRef={stageRef} onModel={setHasScan} mode={mode} />
+        <Arena stageRef={stageRef} onModel={setHasScan} mode={mode} danceSignal={danceSignal} />
       </Suspense>
       <div className="fx-vignette" aria-hidden="true" />
       <div className="fx-scanlines" aria-hidden="true" />
@@ -206,8 +207,9 @@ export default function App() {
 
         <div className="stage" ref={stageRef}>
           <div className="player-plate">
-            <div className="player-name">Drury</div>
-            <div className="player-tag">Hero of Olympus</div>
+            {/* Secret: tapping the name toggles the cat's dance. */}
+            <div className="player-name" onClick={() => setDanceSignal((n) => n + 1)}>Drury</div>
+            <div className="player-tag">Hero of Orem</div>
             <div className="player-level">
               LVL {level} <span>· {pos.week.phase}</span>
             </div>
