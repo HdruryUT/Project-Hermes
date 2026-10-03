@@ -5,7 +5,7 @@ renders behind everything (your character turning on a pedestal), the tabs are t
 and each tab opens in the panel on the right. A black cat wanders the arena.
 
 Two modes, switched in the top bar, each with its own look and soundtrack:
-- **Blue** — cyan neon, a synthwave track generated in the browser.
+- **Blue** — cyan neon, a French-house track (four-on-the-floor, disco bass, pumping filtered chords, robot lead) generated in the browser.
 - **Red** — Spartan red, an original choral-orchestral track played from real recordings
   (`public/audio/spartan/`, ~2 MB, downloaded the first time red is chosen).
 
@@ -123,7 +123,7 @@ src/
 │  ├─ scene.js            three.js arena: temple colonnade, pedestal, hologram/scan, bloom, modes
 │  ├─ cat.js              the roaming black cat (procedural walk/trot/sit on a rigged model)
 │  ├─ Arena.jsx           mounts the scene and frames the figure on the stage area
-│  ├─ tracks.js           the two soundtracks (synth "Messenger", sampled "Spartan")
+│  ├─ tracks.js           the two soundtracks (French-house "Messenger", sampled "Spartan")
 │  └─ audio.js            playback, crossfading between tracks, menu sounds
 ├─ data/
 │  ├─ plan.js             the 10-week schedule + phase colors

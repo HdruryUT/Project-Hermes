@@ -1,7 +1,8 @@
 // The two soundtracks, synthesized with the Web Audio API (no audio files). Each track is built
 // on a given AudioContext and output node, so the same code runs live or in an offline render.
 //
-//   blue — "Messenger": synthwave in A Phrygian dominant (the Mediterranean scale).
+//   blue — "Messenger": French house / disco-funk — four-on-the-floor, disco bass, pumping
+//          filtered chords and a robotic vocoder-style lead (synthesized live).
 //   red  — "Spartan": an original choral-orchestral piece in F# Phrygian played on real
 //          recordings (public/audio/spartan — CC0 VSCO 2 orchestra + CC0 Freesound choirs):
 //          a choir-led opening over a held F# (ison), a drum-driven drop with the choir
@@ -68,103 +69,182 @@ export function createTrack(name, ctx, out, opts = {}) {
 
 // ---- Blue: "Messenger" -----------------------------------------------------
 
+// French house / disco-funk: four-on-the-floor at 122 BPM, octave-jumping disco bass, lush
+// minor-9th chords that pump under the kick and sit behind a slowly opening filter, and a
+// robotic vocoder-style lead. 16 bars that build: filtered intro → filter opens → robot lead
+// → full groove with chord stabs.
 function messenger(ctx, out) {
-  const BPM = 104;
+  const BPM = 122;
   const STEP = 60 / BPM / 4;
-  // A → Bb → Gm → A7, one chord per bar.
-  const CHORDS = [
-    { root: 45, tones: [57, 61, 64, 69] },
-    { root: 46, tones: [58, 62, 65, 70] },
-    { root: 43, tones: [55, 58, 62, 67] },
-    { root: 45, tones: [57, 61, 64, 67] },
-  ];
-  const ARP = [0, 1, 2, 3, 2, 1, 2, 3, 0, 1, 2, 3, 2, 3, 1, 2];
+  const BAR = STEP * 16;
+  const { noise } = resources(ctx);
 
-  // Dotted-8th feedback delay for the arp — the spacey synthwave echo.
-  const delay = ctx.createDelay(1);
-  delay.delayTime.value = STEP * 3;
-  const fb = ctx.createGain();
-  fb.gain.value = 0.38;
-  const wet = ctx.createGain();
-  wet.gain.value = 0.3;
-  delay.connect(fb).connect(delay);
-  delay.connect(wet).connect(out);
+  // Am9 → Fmaj9 → Dm9 → E9, voiced for a warm disco pad. root = bass note (MIDI).
+  const CHORDS = [
+    { root: 45, voicing: [57, 60, 64, 67, 71] },
+    { root: 41, voicing: [53, 57, 60, 64, 67] },
+    { root: 38, voicing: [50, 53, 57, 60, 64] },
+    { root: 40, voicing: [52, 56, 59, 62, 66] },
+  ];
+  // Disco bass: [16th step, interval above the root]
+  const BASS = [[0, 0], [3, 12], [6, 0], [8, 12], [10, 0], [11, 7], [14, 12]];
+  const STABS = [3, 6, 10, 13];
+  // Robot lead, one 4-bar phrase: [step in phrase, MIDI note, length in steps] — original.
+  const LEAD = [
+    [0, 76, 6], [6, 74, 2], [8, 76, 4], [12, 79, 4],
+    [16, 81, 8], [24, 79, 4], [28, 76, 4],
+    [32, 77, 6], [38, 76, 2], [40, 74, 4], [44, 72, 4],
+    [48, 71, 8], [56, 68, 4], [60, 71, 4],
+  ];
+
+  // Chords and stabs run through the "filter house" lowpass and a pumping sidechain bus.
+  const pump = ctx.createGain();
+  const sweep = ctx.createBiquadFilter();
+  sweep.type = "lowpass";
+  sweep.Q.value = 5;
+  sweep.frequency.value = 350;
+  sweep.connect(pump).connect(out);
+
+  // Short room reverb for claps and the lead.
+  const room = ctx.createConvolver();
+  room.buffer = resources(ctx).ir;
+  const roomWet = ctx.createGain();
+  roomWet.gain.value = 0.12;
+  room.connect(roomWet).connect(out);
 
   function kick(t) {
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.exponentialRampToValueAtTime(42, t + 0.14);
-    env(g, t, 0.9, 0.004, 0.32);
+    o.frequency.setValueAtTime(155, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.09);
+    env(g, t, 1.0, 0.002, 0.28);
     o.connect(g).connect(out);
     o.start(t);
-    o.stop(t + 0.4);
+    o.stop(t + 0.35);
+    noiseHit(ctx, out, t, { type: "highpass", freq: 3000, peak: 0.12, release: 0.012 }); // beater click
+    // Sidechain: the chords duck on every kick and swell back — the French-house pump.
+    pump.gain.cancelScheduledValues(t);
+    pump.gain.setValueAtTime(0.25, t);
+    pump.gain.linearRampToValueAtTime(1, t + STEP * 3);
   }
 
-  function bass(t, note) {
-    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
+  // Hand clap: three quick noise bursts, like several hands slightly out of sync.
+  function clap(t) {
+    for (const [dt, pk] of [[0, 0.32], [0.011, 0.3], [0.022, 0.4]]) {
+      noiseHit(ctx, [out, room], t + dt, { type: "bandpass", freq: 1300, q: 1.2, peak: pk, release: dt === 0.022 ? 0.16 : 0.012 });
+    }
+  }
+
+  const hat = (t, open) => noiseHit(ctx, out, t, { type: "highpass", freq: open ? 6500 : 8500, peak: open ? 0.4 : 0.16, release: open ? 0.13 : 0.03 });
+
+  function bass(t, note, len) {
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
     o.type = "sawtooth";
-    o.frequency.value = midiHz(note);
+    o2.type = "square";
+    o.frequency.value = o2.frequency.value = midiHz(note);
+    o2.detune.value = 6;
     f.type = "lowpass";
-    f.frequency.setValueAtTime(900, t);
-    f.frequency.exponentialRampToValueAtTime(180, t + STEP * 0.9);
-    env(g, t, 0.22, 0.005, STEP * 0.9);
-    o.connect(f).connect(g).connect(out);
-    o.start(t);
-    o.stop(t + STEP);
-  }
-
-  // Plucked, lyre-like arp: bright sawtooth through a lowpass that snaps shut.
-  function arp(t, note) {
-    const o = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-    o.type = "sawtooth";
-    o.frequency.value = midiHz(note + 12);
-    f.type = "lowpass";
-    f.Q.value = 6;
-    f.frequency.setValueAtTime(4200, t);
-    f.frequency.exponentialRampToValueAtTime(500, t + STEP * 1.2);
-    env(g, t, 0.07, 0.002, STEP * 1.8);
-    o.connect(f).connect(g);
-    g.connect(out);
-    g.connect(delay);
-    o.start(t);
-    o.stop(t + STEP * 2);
-  }
-
-  function pad(t, tones) {
-    const len = STEP * 16;
-    const f = ctx.createBiquadFilter(), g = ctx.createGain();
-    f.type = "lowpass";
-    f.frequency.value = 1400;
-    swell(g, t, 0.05, 0.5, len - 0.8, 0.3);
+    f.Q.value = 7;
+    f.frequency.setValueAtTime(1400, t);
+    f.frequency.exponentialRampToValueAtTime(220, t + len * 0.8);
+    env(g, t, 0.15, 0.004, len);
+    o.connect(f);
+    o2.connect(f);
     f.connect(g).connect(out);
-    for (const n of tones.slice(0, 3)) {
-      for (const detune of [-8, 8]) {
+    for (const x of [o, o2]) {
+      x.start(t);
+      x.stop(t + len + 0.05);
+    }
+  }
+
+  // Lush pad: detuned saws on each chord tone, into the sweep filter → pump.
+  function chord(t, voicing, len, peak, attack) {
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(peak, t + attack);
+    g.gain.setValueAtTime(peak, t + len - 0.04);
+    g.gain.linearRampToValueAtTime(0.0001, t + len);
+    g.connect(sweep);
+    for (const n of voicing) {
+      for (const detune of [-9, 9]) {
         const o = ctx.createOscillator();
         o.type = "sawtooth";
         o.frequency.value = midiHz(n);
         o.detune.value = detune;
-        o.connect(f);
+        o.connect(g);
         o.start(t);
-        o.stop(t + len + 0.05);
+        o.stop(t + len + 0.02);
       }
     }
   }
 
+  // Robot lead: a buzzy saw+square voice shaped by two vowel formant filters that glide from
+  // "oh" to "ah" across each note — the talk-box / vocoder colour. No vibrato: robotic.
+  function robot(t, note, len) {
+    const f0 = midiHz(note);
+    const src = [ctx.createOscillator(), ctx.createOscillator()];
+    src[0].type = "sawtooth";
+    src[1].type = "square";
+    src[1].detune.value = -1200; // octave below adds body
+    const mix = ctx.createGain();
+    mix.gain.value = 0.5;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.16, t + 0.02);
+    g.gain.setValueAtTime(0.16, t + len - 0.03);
+    g.gain.linearRampToValueAtTime(0.0001, t + len + 0.04);
+    for (const [fa, fb, q, lvl] of [[450, 750, 7, 1], [850, 1200, 9, 0.7], [2400, 2600, 6, 0.25]]) {
+      const bp = ctx.createBiquadFilter(), lg = ctx.createGain();
+      bp.type = "bandpass";
+      bp.Q.value = q;
+      bp.frequency.setValueAtTime(fa, t);
+      bp.frequency.linearRampToValueAtTime(fb, t + Math.min(len, 0.25));
+      lg.gain.value = lvl * 3;
+      mix.connect(bp).connect(lg).connect(g);
+    }
+    for (const o of src) {
+      o.frequency.setValueAtTime(f0 * 0.985, t);
+      o.frequency.exponentialRampToValueAtTime(f0, t + 0.03); // tiny scoop into the note
+      o.connect(mix);
+      o.start(t);
+      o.stop(t + len + 0.08);
+    }
+    g.connect(out);
+    g.connect(room);
+  }
+
+  // Filter-house cutoff per bar: closed and murky → opens over the build → stays bright.
+  const CUTOFF = [350, 450, 600, 800, 1100, 1600, 2300, 3200, 4500, 5500, 6000, 4500, 6500, 7500, 7500, 5000];
+
   return {
     ready: Promise.resolve(),
     stepDur: STEP,
-    loopSteps: 16 * CHORDS.length,
-    level: 0.8,
+    loopSteps: 16 * CUTOFF.length,
+    level: 0.75,
     play(i, t) {
-      const bar = Math.floor(i / 16) % CHORDS.length;
-      const s = i % 16;
-      const chord = CHORDS[bar];
-      if (s === 0) pad(t, chord.tones);
+      const bar = Math.floor(i / 16), s = i % 16;
+      const c = CHORDS[bar % CHORDS.length];
+      const intro = bar < 4, leadIn = bar >= 8, full = bar >= 12;
+
+      if (s === 0) {
+        const next = CUTOFF[(bar + 1) % CUTOFF.length];
+        sweep.frequency.setValueAtTime(CUTOFF[bar], t);
+        sweep.frequency.exponentialRampToValueAtTime(next, t + BAR);
+        chord(t, c.voicing, BAR, 0.06, 0.03);
+      }
       if (s % 4 === 0) kick(t);
-      if (s === 4 || s === 12) noiseHit(ctx, out, t, { type: "bandpass", freq: 1900, peak: 0.28, release: 0.18 });
-      if (s % 4 === 2) noiseHit(ctx, out, t, { type: "highpass", freq: 7500, peak: 0.12, release: 0.05 });
-      bass(t, chord.root + (s % 2 ? 12 : 0));
-      arp(t, chord.tones[ARP[s]]);
+      if (!intro && (s === 4 || s === 12)) clap(t);
+      if (s % 4 === 2) hat(t, true);
+      else if (!intro || s % 2 === 0) hat(t, false);
+
+      const b = BASS.find(([at]) => at === s);
+      if (b && (!intro || bar >= 2)) bass(t, c.root + b[1], STEP * (b[1] === 0 ? 1.8 : 1.3));
+
+      if (full && STABS.includes(s)) chord(t, c.voicing.map((n) => n + 12).slice(1), STEP * 0.9, 0.05, 0.005);
+
+      if (leadIn) {
+        const n = LEAD.find(([at]) => at === (bar % 4) * 16 + s);
+        if (n) robot(t, n[1], n[2] * STEP);
+      }
     },
   };
 }
