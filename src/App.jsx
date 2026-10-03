@@ -23,16 +23,16 @@ const NUMERALS = ["Α", "Β", "Γ", "Δ", "Ε", "Ϛ", "Ζ", "Η", "Θ", "Ι"];
 const Arena = lazy(() => import("./game/Arena.jsx"));
 
 const TABS = [
-  { id: "dashboard", label: "Dashboard", title: "Mount Olympus", Icon: IconHome },
-  { id: "schedule", label: "Schedule", title: "The Odyssey", Icon: IconCalendar },
-  { id: "strength", label: "Strength", title: "The Palaestra", Icon: IconDumbbell },
-  { id: "fuel", label: "Fuel Calc", title: "Nectar & Ambrosia", Icon: IconDroplet },
-  { id: "eating", label: "Eating", title: "The Feast", Icon: IconEating },
-  { id: "grocery", label: "Grocery", title: "The Agora", Icon: IconGrocery },
-  { id: "gear", label: "Gear", title: "The Armory", Icon: IconShirt },
-  { id: "raceday", label: "Race Day", title: "Run of Pheidippides", Icon: IconFlag },
-  { id: "log", label: "Log", title: "The Chronicle", Icon: IconLog },
-  { id: "paces", label: "Paces & Strava", title: "The Oracle", Icon: IconGauge },
+  { id: "dashboard", label: "Dashboard", Icon: IconHome },
+  { id: "schedule", label: "Schedule", Icon: IconCalendar },
+  { id: "strength", label: "Strength", Icon: IconDumbbell },
+  { id: "fuel", label: "Fuel Calc", Icon: IconDroplet },
+  { id: "eating", label: "Eating", Icon: IconEating },
+  { id: "grocery", label: "Grocery", Icon: IconGrocery },
+  { id: "gear", label: "Gear", Icon: IconShirt },
+  { id: "raceday", label: "Race Day", Icon: IconFlag },
+  { id: "log", label: "Log", Icon: IconLog },
+  { id: "paces", label: "Paces & Strava", Icon: IconGauge },
 ];
 
 // Colour mode — each recolours the arena + UI and has its own soundtrack (src/game/tracks.js).
@@ -223,7 +223,6 @@ export default function App() {
           <div className="panel-head">
             <span className="panel-num"><span>{NUMERALS[activeIndex]}</span></span>
             <div>
-              <div className="panel-kicker">{active.title}</div>
               <h2 className="panel-title">{active.label}</h2>
             </div>
           </div>

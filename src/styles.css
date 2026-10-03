@@ -169,7 +169,6 @@ body {
   content: ""; position: absolute; left: 0; right: 0; bottom: -13px; height: 12px;
   background: var(--meander) repeat-x; background-size: 12px 12px; opacity: 0.55; pointer-events: none;
 }
-.panel-kicker { font-family: var(--font-classic); font-size: 13px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); opacity: 0.85; }
 .panel-title { margin: 0; font-family: var(--font-classic); font-size: 26px; font-weight: 900; letter-spacing: 3px; text-transform: uppercase; color: #fff; }
 .panel-content { animation: panel-in 0.28s ease-out; }
 @keyframes panel-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
