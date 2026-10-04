@@ -11,6 +11,7 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { createCat } from "./cat.js";
+import hermesImg from "../assets/hermes-projection.png";
 
 export const MODEL_URL = "/models/me.glb";
 
@@ -275,23 +276,88 @@ function buildParticles(scene) {
   return points;
 }
 
+// Hermes, watching over the arena: the logo projected as a colossal, faint hologram at the far
+// end of the hall. Drawn in the mode's accent with his gold details glowing, scanlines and a
+// gentle flicker; turns to face the camera and drifts slowly.
+function buildHermesWatcher(scene) {
+  const tex = new THREE.TextureLoader().load(hermesImg);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uMap: { value: tex }, uColor: { value: NEON.clone() }, uGold: { value: GOLD.clone().multiplyScalar(1.6) },
+      uTime: { value: 0 }, uOpacity: { value: 0.32 }, uGlitch: { value: 0 },
+    },
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap; uniform vec3 uColor; uniform vec3 uGold;
+      uniform float uTime; uniform float uOpacity; uniform float uGlitch;
+      varying vec2 vUv;
+      void main() {
+        vec2 uv = vUv;
+        uv.x += uGlitch * 0.03 * step(0.6, fract(sin(floor(uv.y * 18.0) * 91.7 + uTime) * 437.5)); // stutters with the figure
+        vec4 tex = texture2D(uMap, uv);
+        if (tex.a < 0.03) discard;
+        float lum = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+        // gold parts of the art (helmet wings, caduceus, sandals) stay gold; the rest takes the accent
+        float goldness = clamp((tex.r - tex.b) * 2.2, 0.0, 1.0) * smoothstep(0.35, 0.7, lum);
+        vec3 col = mix(uColor * (0.35 + lum * 1.3), uGold * (0.5 + lum), goldness);
+        float lines = 0.65 + 0.35 * step(0.5, fract(vUv.y * 170.0 - uTime * 0.7));
+        float flicker = 0.88 + 0.12 * sin(uTime * 11.0) * sin(uTime * 4.3);
+        float fade = smoothstep(0.0, 0.3, vUv.y); // dissolves into the floor haze
+        float a = tex.a * lines * flicker * fade * uOpacity;
+        gl_FragColor = vec4(col * a, a);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+  });
+  const aspect = 1234 / 1274; // source image
+  const H = 6.4;
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(H * aspect, H), material);
+  plane.position.set(0.3, 3.7, -15.5);
+  scene.add(plane);
+  return { plane, material };
+}
+
 // ---- Hologram stand-in figure --------------------------------------------
 
+// The hologram's look, plus two live effects driven from uniforms:
+//   uGlitch  — occasional glitch: slices jolt sideways, bands drop out, colour flickers
+//   uBody    — training body map (x: Achilles/lower calf watch, y: legs load, z: core) glowing
+//              on those areas in figure space (feet at y = 0, metres; uFigureInv maps world → figure)
 function hologramMaterial() {
   return new THREE.ShaderMaterial({
-    uniforms: { uColor: { value: NEON.clone() }, uTime: { value: 0 } },
+    uniforms: {
+      uColor: { value: NEON.clone() }, uTime: { value: 0 },
+      uGlitch: { value: 0 }, uGlitchSeed: { value: 0 },
+      uBody: { value: new THREE.Vector3() }, uFigureInv: { value: new THREE.Matrix4() },
+    },
     vertexShader: /* glsl */ `
-      varying vec3 vN; varying vec3 vView; varying float vY;
+      uniform float uGlitch; uniform float uGlitchSeed; uniform mat4 uFigureInv;
+      varying vec3 vN; varying vec3 vView; varying float vY; varying vec3 vFig;
+      float hash(float n) { return fract(sin(n) * 43758.5453); }
       void main() {
         vec4 wp = modelMatrix * vec4(position, 1.0);
+        // Glitch: some horizontal slices jolt sideways.
+        float band = floor(wp.y * 14.0);
+        float h = hash(band + uGlitchSeed * 17.0);
+        wp.x += step(0.62, h) * (h - 0.8) * 0.35 * uGlitch;
         vY = wp.y;
+        vFig = (uFigureInv * wp).xyz;
         vN = normalize(mat3(modelMatrix) * normal);
         vView = normalize(cameraPosition - wp.xyz);
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
     fragmentShader: /* glsl */ `
       uniform vec3 uColor; uniform float uTime;
-      varying vec3 vN; varying vec3 vView; varying float vY;
+      uniform float uGlitch; uniform float uGlitchSeed; uniform vec3 uBody;
+      varying vec3 vN; varying vec3 vView; varying float vY; varying vec3 vFig;
+      float hash(float n) { return fract(sin(n) * 43758.5453); }
+      // Soft mask around a point in figure space, mirrored across the body's midline (legs).
+      float region(vec3 c, float r) {
+        vec3 p = vec3(abs(vFig.x), vFig.y, vFig.z);
+        return 1.0 - smoothstep(r * 0.45, r, distance(p, c));
+      }
       void main() {
         // Clamp before pow(): rounding can push |dot| a hair over 1, and pow(negative) is NaN —
         // which bloom smears into flashing black blotches.
@@ -299,8 +365,28 @@ function hologramMaterial() {
         float lines = 0.55 + 0.45 * step(0.5, fract(vY * 42.0 - uTime * 1.4));
         float sweepY = mod(uTime * 0.45, 2.4) - 0.2;
         float sweep = 1.0 - smoothstep(0.0, 0.07, abs(vY - sweepY)); // edge0 > edge1 is undefined in GLSL
+
+        vec3 col = uColor;
+
+        // Body map. Legs: thighs + shins brighten with recent mileage. Core: gold after strength.
+        // Achilles / lower calf: slow amber pulse while on watch.
+        float legs = region(vec3(0.1, 0.5, 0.0), 0.34) * uBody.y;
+        float core = region(vec3(0.0, 1.12, 0.0), 0.24) * uBody.z;
+        float achilles = region(vec3(0.1, 0.24, -0.02), 0.16) * uBody.x;
+        col = mix(col, uColor * 1.9 + 0.08, legs * 0.65);      // legs: brighter in the hologram's colour
+        col = mix(col, vec3(2.2, 1.25, 0.12), core * 0.85);     // core: saturated gold
+        float amberPulse = 0.65 + 0.35 * sin(uTime * 3.2);
+        col = mix(col, vec3(2.6, 0.95, 0.08), clamp(achilles * 1.5, 0.0, 1.0)); // achilles: amber
+
         float a = (0.1 + rim * 0.9) * lines + sweep * 0.5;
-        gl_FragColor = vec4(uColor * (0.5 + rim * 2.2 + sweep * 2.0), a);
+        a += achilles * 0.55 * amberPulse + legs * 0.12 + core * 0.15;
+
+        // Glitch: whole bands drop out and the colour skews for a moment.
+        float drop = step(0.78, hash(floor(vY * 30.0) + uGlitchSeed * 31.0)) * uGlitch;
+        col = mix(col, col.bgr * 1.3, 0.5 * uGlitch * step(0.5, hash(floor(vY * 9.0) + uGlitchSeed)));
+        a *= 1.0 - drop;
+
+        gl_FragColor = vec4(col * (0.5 + rim * 2.2 + sweep * 2.0), a);
       }`,
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
   });
@@ -384,11 +470,22 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
   buildArena(scene);
   const { dashes } = buildPedestal(scene);
   const particles = buildParticles(scene);
+  const hermes = buildHermesWatcher(scene);
 
   const turntable = new THREE.Group();
   turntable.position.y = PEDESTAL_TOP;
   scene.add(turntable);
   const holoMat = hologramMaterial();
+  let glitchTimer = 3, glitchLeft = 0;
+  const bodyTarget = new THREE.Vector3(); // achilles, legs, core (0–1), eased into the shader
+  if (import.meta.env?.DEV) {
+    // Dev-only handle for screenshots/tests: force a glitch or a body map.
+    window.__holo = {
+      glitch: (secs = 0.3) => { glitchLeft = secs; },
+      body: (b) => bodyTarget.set(b.achilles ?? 0, b.legs ?? 0, b.core ?? 0),
+      state: () => ({ target: bodyTarget.toArray(), uniform: holoMat.uniforms.uBody.value.toArray() }),
+    };
+  }
   let figure = buildHologram(holoMat);
   turntable.add(figure);
 
@@ -420,6 +517,7 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
     hemi.color.copy(blend("sky"));
     hemi.groundColor.copy(blend("ground"));
     holoMat.uniforms.uColor.value.copy(accent);
+    hermes.material.uniforms.uColor.value.copy(accent);
     rimCool.color.copy(accent);
     for (let i = 0; i < particleColors.count; i++) {
       if (i % 3) particleColors.setXYZ(i, accent.r * 2, accent.g * 2, accent.b * 2);
@@ -550,7 +648,9 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
-    const dt = Math.min(0.05, (now - last) / 1000);
+    // Clamp both ways: the first frame's timestamp can predate the scene setup (a negative step
+    // that sent eased values backwards), and long stalls shouldn't jump the animation.
+    const dt = Math.max(0, Math.min(0.05, (now - last) / 1000));
     last = now;
     t += dt;
 
@@ -560,6 +660,30 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
     }
     dashes.rotation.y -= dt * (reduceMotion ? 0.02 : 0.15);
     holoMat.uniforms.uTime.value = t;
+
+    // Glitch every few seconds, for a fraction of a second.
+    glitchTimer -= dt;
+    if (glitchTimer <= 0 && !reduceMotion) {
+      glitchLeft = 0.12 + Math.random() * 0.25;
+      glitchTimer = 4 + Math.random() * 6;
+    }
+    if (glitchLeft > 0) {
+      glitchLeft -= dt;
+      holoMat.uniforms.uGlitch.value = Math.random() < 0.7 ? 1 : 0.3; // stutter
+      holoMat.uniforms.uGlitchSeed.value = Math.floor(t * 20); // new slices every 50 ms
+    } else {
+      holoMat.uniforms.uGlitch.value = 0;
+    }
+
+    // Hermes in the background: faces the camera, drifts gently, glitches with the figure.
+    hermes.material.uniforms.uTime.value = t;
+    hermes.material.uniforms.uGlitch.value = holoMat.uniforms.uGlitch.value;
+    hermes.plane.position.y = 3.7 + (reduceMotion ? 0 : Math.sin(t * 0.35) * 0.12);
+    hermes.plane.lookAt(camera.position.x, hermes.plane.position.y, camera.position.z);
+
+    // Body map lives in figure space, which turns with the turntable.
+    holoMat.uniforms.uFigureInv.value.copy(turntable.matrixWorld).invert();
+    holoMat.uniforms.uBody.value.lerp(bodyTarget, Math.min(1, dt * 2));
     cat.update(dt, camera);
     if (mix !== mixTarget) {
       mix += (mixTarget - mix) * Math.min(1, dt * 3);
@@ -609,6 +733,8 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
   return {
     setFocus,
     setMode,
+    // Training body map levels, 0–1 each: { achilles, legs, core }.
+    setBodyMap: ({ achilles = 0, legs = 0, core = 0 } = {}) => bodyTarget.set(achilles, legs, core),
     toggleCatDance: () => cat.toggleDance(),
     dispose() {
       disposed = true;
@@ -620,6 +746,7 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
       document.removeEventListener("visibilitychange", onVisibility);
       cat.dispose();
       disposeObject(scene);
+      hermes.material.uniforms.uMap.value.dispose(); // shader-uniform textures aren't found by disposeObject
       scene.environment?.dispose();
       pmrem.dispose();
       target.dispose();

@@ -1,8 +1,9 @@
-import { useState, useEffect, useRef, lazy, Suspense } from "react";
+import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { computeZones } from "./utils/paces.js";
 import { daysUntilRace, currentPosition, milesThroughWeek, totalPlannedMiles } from "./utils/schedule.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import { useStravaAutoSync } from "./hooks/useStravaAutoSync.js";
+import { bodyStatus } from "./utils/bodyStatus.js";
 import { setSoundEnabled, setTrack, unlockAudio, playHover, playSelect } from "./game/audio.js";
 import HermesLogo from "./components/HermesLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
@@ -81,6 +82,14 @@ export default function App() {
   const [hasScan, setHasScan] = useState(false);
   const [danceSignal, setDanceSignal] = useState(0); // secret: tap the player name
   useStravaAutoSync();
+  const [activities] = useLocalStorage("orca.activities", null);
+  // Re-check every 10 min so the body map rolls over at midnight even if the app stays open.
+  const [clockTick, setClockTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setClockTick((n) => n + 1), 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  const body = useMemo(() => bodyStatus(activities), [activities, clockTick]);
   const stageRef = useRef(null);
   const panelRef = useRef(null);
   const menuRefs = useRef([]);
@@ -152,7 +161,7 @@ export default function App() {
   return (
     <div className="game">
       <Suspense fallback={null}>
-        <Arena stageRef={stageRef} onModel={setHasScan} mode={mode} danceSignal={danceSignal} />
+        <Arena stageRef={stageRef} onModel={setHasScan} mode={mode} danceSignal={danceSignal} bodyMap={body.levels} />
       </Suspense>
       <div className="fx-vignette" aria-hidden="true" />
       <div className="fx-scanlines" aria-hidden="true" />
@@ -217,6 +226,11 @@ export default function App() {
             </div>
             <div className="xp-bar"><span style={{ width: `${Math.round((xpMiles / xpTotal) * 100)}%` }} /></div>
             <div className="xp-meta">Plan XP · {xpMiles} / {xpTotal} mi</div>
+            {body.notes.length > 0 && (
+              <div className="body-notes">
+                {body.notes.map((n) => <span key={n.text} className={`body-note ${n.tone}`}>{n.text}</span>)}
+              </div>
+            )}
             <div className="stage-hint">
               ⟲ Drag to rotate{!hasScan && " · hologram stand-in until your 3D scan is added"}
             </div>
