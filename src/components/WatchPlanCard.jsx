@@ -72,8 +72,8 @@ export default function WatchPlanCard() {
 
       {f && (
         <div className="wp-fuel">
-          <div><span className="lbl">Gels + chews</span><b>{f.count} + {f.chews}</b><span className="lbl">carry {f.count + 2} gels · ~{f.chews + 3} chews</span></div>
-          <div className={f.carbsPerHour < 60 ? "warn" : ""}><span className="lbl">Carbs</span><b>{Math.round(f.carbsPerHour)} g/h</b><span className="lbl">{f.carbsG} g · aim 60–90</span></div>
+          <div><span className="lbl">Gels + chews</span><b>{f.count} + {f.chews}</b><span className="lbl">+ {f.pre} pre-start · carry {f.count + f.pre + 1} gels, ~{f.chews + 3} chews</span></div>
+          <div className={f.carbsPerHour < 60 ? "warn" : ""}><span className="lbl">Carbs</span><b>{Math.round(f.carbsPerHour)} g/h</b><span className="lbl">{f.carbsG} g incl. pre-start · aim 60–90</span></div>
           <div className={f.sodiumPerHour < 300 ? "warn" : ""}><span className="lbl">Sodium</span><b>{Math.round(f.sodiumPerHour)} mg/h</b><span className="lbl">gels + chews · aim 300–600</span></div>
         </div>
       )}

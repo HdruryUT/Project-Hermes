@@ -78,7 +78,7 @@ export const RACE_DAY = [
   {
     section: "During the race (26.2 mi)",
     rows: [
-      { when: "Every Watch buzz", what: "Gel + 1 salt chew + a few sips of water — at miles 4.6, 9.2, 13.5, 17.6 and 22.1 (one every 30 min). That's ~41 g carbs and ~340 mg sodium per hour, plus whatever sports drink you take. Carry 7 gels (pre-start, 5 in the race, 1 spare) and ~8 chews." },
+      { when: "Every Watch buzz", what: "Gel + 1 salt chew + a few sips of water — at miles 4.6, 9.2, 13.5, 17.6 and 22.1 (every 30 min, your usual ~4.5-mile rhythm). With the pre-start gel that's ~49 g carbs and ~375 mg sodium per hour; sip sports drink at aid stations in the last 10K for a little more. Carry 7 gels (pre-start, 5 in the race, 1 spare) and ~8 chews." },
       { when: "Fluids", what: "Drink to thirst at aid stations — small, frequent sips. Alternate water and sports drink. Favor electrolytes in heat; avoid over-drinking plain water." },
       { when: "Electrolytes", what: "1 salt chew (100 mg sodium, 30 mg potassium) with each gel is the default. Only add an extra chew if it's warm, you're caked in salt, or a cramp is starting. Drink to thirst — don't force plain water." },
       { when: "Pacing", what: "Start at the slow end of your 6:23–6:33 range for the first couple of miles and let it settle. Staying inside each range (your Watch alerts) is what keeps you under 3:00." },
@@ -95,7 +95,9 @@ export const RACE_DAY = [
 ];
 
 // The gels used on race day (per gel).
-export const RACE_GEL = { carbsG: 24, sodiumMg: 100, everyMin: 30 }; // everyMin: chosen spacing in the race
+// everyMin: spacing in the race (optionally tighter after lateAfterMin, every lateEveryMin — not
+// used now). preStart: one gel 10–15 min before the gun.
+export const RACE_GEL = { carbsG: 24, sodiumMg: 100, everyMin: 30, preStart: 1 };
 // Taken with each gel during the race.
 export const RACE_SALT_CHEW = { sodiumMg: 100, potassiumMg: 30, perGel: 1 };
 // Pre-race electrolyte drink, 2–3 hours before the start.

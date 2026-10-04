@@ -36,13 +36,16 @@ export function buildWatchPlan(sections, { gelEveryMin = 25, firstGelMin = gelEv
 
   // Walk the course in 0.01-mile steps at each section's mid pace (padded for GPS distance)
   // to find where each gel falls.
-  const gels = [];
-  let t = 0, nextGel = firstGelMin * 60;
+  const gels = [], lateGels = [];
+  let t = 0, nextGel = firstGelMin * 60, lateSpacing = false;
   for (let mi = 0; mi < RACE_MI; mi += 0.01) {
     t += sectionAt(mi).mid * 0.01 * SUB3.distanceFactor;
-    if (t >= nextGel && RACE_MI - mi > 1.5) { // no point in a gel inside the last mile and a half
+    if (t >= nextGel && RACE_MI - mi > (gel?.noGelLastMi ?? 1.5)) { // no gels inside the final stretch
+      if (lateSpacing) lateGels.push(gels.length); // placed by the tighter late spacing
       gels.push(Math.round(mi * 100) / 100);
-      nextGel += gelEveryMin * 60;
+      // Tighter spacing for the final stretch, if the gel plan asks for it.
+      lateSpacing = gel?.lateAfterMin != null && t >= gel.lateAfterMin * 60;
+      nextGel += (lateSpacing ? gel.lateEveryMin : gelEveryMin) * 60;
     }
   }
   const expectedSec = t;
@@ -50,7 +53,13 @@ export function buildWatchPlan(sections, { gelEveryMin = 25, firstGelMin = gelEv
 
   // Segment boundaries: every gel point and every pace change.
   const events = [
-    ...gels.map((mi, i) => ({ mi, kind: "gel", label: chew ? `Gel #${i + 1} + ${chew.perGel} salt chew` : `Gel #${i + 1}` })),
+    ...gels.map((mi, i) => {
+      // The extra gels from tighter late spacing are optional: take them only if the stomach
+      // feels good (the last gel stays a regular one).
+      const bonus = lateGels.includes(i) && i !== gels.length - 1;
+      const what = chew ? `Gel #${i + 1} + ${chew.perGel} salt chew` : `Gel #${i + 1}`;
+      return { mi, kind: "gel", bonus, label: bonus ? `Bonus: ${what} — only if your stomach feels good` : what };
+    }),
     ...secs.slice(1).map((s) => ({
       mi: s.from,
       kind: "pace",
@@ -84,15 +93,18 @@ export function buildWatchPlan(sections, { gelEveryMin = 25, firstGelMin = gelEv
 
   // Fuel from the actual gels.
   const hours = expectedSec / 3600;
-  // Sodium comes from the gels plus any salt chews taken with them.
+  // Carbs and sodium over the race, counting the pre-start gel (it fuels the first half hour)
+  // and the salt chews taken with each in-race gel.
+  const pre = gel?.preStart || 0;
   const sodiumPerGelStop = (gel?.sodiumMg || 0) + (chew ? chew.sodiumMg * chew.perGel : 0);
   const fuel = gel && {
     count: gels.length,
+    pre,
     chews: chew ? gels.length * chew.perGel : 0,
-    carbsG: gels.length * gel.carbsG,
-    carbsPerHour: (gels.length * gel.carbsG) / hours,
-    sodiumMg: gels.length * sodiumPerGelStop,
-    sodiumPerHour: (gels.length * sodiumPerGelStop) / hours,
+    carbsG: (gels.length + pre) * gel.carbsG,
+    carbsPerHour: ((gels.length + pre) * gel.carbsG) / hours,
+    sodiumMg: gels.length * sodiumPerGelStop + pre * gel.sodiumMg,
+    sodiumPerHour: (gels.length * sodiumPerGelStop + pre * gel.sodiumMg) / hours,
   };
   return { steps, gels, expectedSec, worstSec, sections: secs, fuel };
 }
