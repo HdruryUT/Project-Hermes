@@ -9,13 +9,18 @@
 // an `effort` the pace engine can use.
 
 import { riegelPredict } from "../utils/paces.js";
+import { PLAN_START } from "../data/plan.js";
+
+// Everything since the plan started (epoch seconds, with a week's margin), so a sync covers
+// the whole training block rather than just the most recent page of activities.
+const blockStart = () => Math.floor(new Date(PLAN_START + "T00:00:00").getTime() / 1000) - 7 * 86400;
 
 const API = "https://www.strava.com/api/v3";
 const MARATHON_MI = 26.2188;
 const METERS_PER_MILE = 1609.344;
 
-export async function fetchActivities(token, perPage = 60) {
-  const res = await fetch(`${API}/athlete/activities?per_page=${perPage}`, {
+export async function fetchActivities(token, perPage = 200) {
+  const res = await fetch(`${API}/athlete/activities?per_page=${perPage}&after=${blockStart()}`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (res.status === 401) throw new Error("Strava token invalid or expired. Generate a fresh one.");
@@ -82,8 +87,8 @@ export async function stravaStatus() {
   }
 }
 
-export async function fetchActivitiesFromBackend(perPage = 60) {
-  const res = await fetch(`/api/strava/activities?per_page=${perPage}`);
+export async function fetchActivitiesFromBackend(perPage = 200) {
+  const res = await fetch(`/api/strava/activities?per_page=${perPage}&after=${blockStart()}`);
   if (res.status === 401) throw new Error("Strava isn't connected — click Connect Strava first.");
   if (!res.ok) throw new Error(`Strava sync failed (${res.status}).`);
   return res.json();

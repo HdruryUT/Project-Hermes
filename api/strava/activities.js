@@ -19,9 +19,12 @@ export default async function handler(req, res) {
   }
 
   const url = new URL(req.url, `http://${req.headers.host}`);
-  const perPage = Math.min(Number(url.searchParams.get("per_page")) || 60, 100);
+  const perPage = Math.min(Number(url.searchParams.get("per_page")) || 60, 200); // Strava's max
+  // Optional lower bound (epoch seconds) so a sync can cover the whole training block.
+  const after = Number(url.searchParams.get("after"));
+  const afterParam = Number.isFinite(after) && after > 0 ? `&after=${Math.floor(after)}` : "";
 
-  const actRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?per_page=${perPage}`, {
+  const actRes = await fetch(`https://www.strava.com/api/v3/athlete/activities?per_page=${perPage}${afterParam}`, {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
   });
 

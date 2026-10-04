@@ -6,6 +6,15 @@ import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { IconEating, IconGrocery, IconFlag, IconShirt } from "./icons.jsx";
 import MileageChart from "./MileageChart.jsx";
 
+// "just now", "12 min ago", "3 hr ago", "on Sep 28"
+function syncedAgo(iso) {
+  const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  if (mins < 24 * 60) return `${Math.round(mins / 60)} hr ago`;
+  return `on ${new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+}
+
 const GLANCE_ZONES = ["easy", "long", "tempo", "marathon"];
 
 export default function DashboardTab({ zones, goToTab }) {
@@ -18,6 +27,7 @@ export default function DashboardTab({ zones, goToTab }) {
   const progressPct = Math.round((doneMiles / totalMiles) * 100);
 
   const [activities] = useLocalStorage("orca.activities", null);
+  const [syncedAt] = useLocalStorage("orca.activities.syncedAt", null);
   const cutoffWeek = state === "after" ? PLAN.length - 1 : state === "during" ? pos.weekIndex : -1;
   const actualSeries = activities && cutoffWeek >= 0
     ? weeklyActualMiles(activities).map((m, i) => (i <= cutoffWeek ? m : null))
@@ -123,7 +133,8 @@ export default function DashboardTab({ zones, goToTab }) {
         </div>
         <div className="sub">
           Planned miles per week across the plan{state === "during" ? " — this week is highlighted" : ""}.
-          {!activities && " Sync Strava on the Log tab to see actual mileage overlaid here."}
+          {!activities && " Connect Strava on the Paces & Strava tab to see actual mileage overlaid here."}
+          {activities && syncedAt && <> Actual mileage last synced {syncedAgo(syncedAt)}.</>}
         </div>
         <MileageChart plan={PLAN} activeWeekIndex={state === "during" ? pos.weekIndex : null} actual={actualSeries} />
       </div>

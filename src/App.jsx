@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { computeZones } from "./utils/paces.js";
 import { daysUntilRace, currentPosition, milesThroughWeek, totalPlannedMiles } from "./utils/schedule.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
+import { useStravaAutoSync } from "./hooks/useStravaAutoSync.js";
 import { setSoundEnabled, setTrack, unlockAudio, playHover, playSelect } from "./game/audio.js";
 import HermesLogo from "./components/HermesLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
@@ -79,6 +80,7 @@ export default function App() {
   const [mode, setMode] = useLocalStorage("orca.mode", "blue");
   const [hasScan, setHasScan] = useState(false);
   const [danceSignal, setDanceSignal] = useState(0); // secret: tap the player name
+  useStravaAutoSync();
   const stageRef = useRef(null);
   const panelRef = useRef(null);
   const menuRefs = useRef([]);
