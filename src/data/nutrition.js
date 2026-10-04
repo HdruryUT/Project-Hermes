@@ -63,6 +63,7 @@ export const RACE_DAY = [
     rows: [
       { when: "Wed & Thu", what: "Gradually shift meals toward carbs (~3–4 g/lb): rice, pasta, potatoes, bread, fruit. Keep protein moderate, fat lower. Don't overeat — you're topping off glycogen, not stuffing." },
       { when: "Fri (day before)", what: "Carb-forward, familiar, low-fiber foods. Bigger lunch, moderate early dinner (pasta/rice + light protein). Hydrate with electrolytes all day. Avoid new/spicy/greasy food and alcohol." },
+      { when: "Every day through Fri", what: "Keep your usual scoop of beet powder (≈700 mg nitrate from the betaine nitrate + beet root) with breakfast. Skip antiseptic mouthwash — it blunts the nitrate effect. Pink urine is harmless." },
       { when: "Fri evening", what: "Lay out all gear (Gear tab). Set two alarms. Light easy day — legs up, relax." },
     ],
   },
@@ -70,16 +71,17 @@ export const RACE_DAY = [
     section: "Race morning — Sat Oct 10",
     rows: [
       { when: "3–3.5 hrs before", what: "Familiar breakfast, ~600–800 cal, carb-heavy & low fiber: oatmeal + banana + honey, or bagel + peanut butter + banana. Coffee if that's your routine. Same breakfast you rehearsed before long runs." },
-      { when: "Up to the start", what: "Sip water/electrolytes. Optional small top-off ~15 min before: half a banana, a few chews, or a gel. Use the bathroom. Nothing new." },
+      { when: "2–3 hrs before", what: "1 scoop Re-Lyte (810 mg sodium, 400 mg potassium) in 16–20 oz water, with or after breakfast. Finish it by ~90 min before the start so there's time for a bathroom stop. (Skip the pickle juice — this covers it.) Plus ½ scoop of beet powder with breakfast (≈350 mg nitrate) — nitrate peaks 2–3 h later, and the half dose keeps race-morning stomach easy." },
+      { when: "10–15 min before", what: "1 gel (24 g carbs) with a few sips of water. Use the bathroom. Nothing new." },
     ],
   },
   {
     section: "During the race (26.2 mi)",
     rows: [
-      { when: "Carbs", what: "1 gel (24 g) 10–15 min before the start, then 1 every 30 min — around miles 4.6, 9.2, 13.5, 17.6 and 22.1 (your Watch buzzes at each). Take each with a few sips of water. Carry 7: pre-start, 5 in the race, 1 spare." },
+      { when: "Every Watch buzz", what: "Gel + 1 salt chew + a few sips of water — at miles 4.6, 9.2, 13.5, 17.6 and 22.1 (one every 30 min). That's ~41 g carbs and ~340 mg sodium per hour, plus whatever sports drink you take. Carry 7 gels (pre-start, 5 in the race, 1 spare) and ~8 chews." },
       { when: "Fluids", what: "Drink to thirst at aid stations — small, frequent sips. Alternate water and sports drink. Favor electrolytes in heat; avoid over-drinking plain water." },
-      { when: "Electrolytes", what: "Add salt/electrolyte caps if it's warm or you're a salty sweater. Late cramping is often sodium, not just fatigue." },
-      { when: "Pacing", what: "Start conservative — first few miles slightly slower than goal pace. A negative split feels far better than blowing up at mile 20." },
+      { when: "Electrolytes", what: "1 salt chew (100 mg sodium, 30 mg potassium) with each gel is the default. Only add an extra chew if it's warm, you're caked in salt, or a cramp is starting. Drink to thirst — don't force plain water." },
+      { when: "Pacing", what: "Start at the slow end of your 6:23–6:33 range for the first couple of miles and let it settle. Staying inside each range (your Watch alerts) is what keeps you under 3:00." },
     ],
   },
   {
@@ -94,6 +96,10 @@ export const RACE_DAY = [
 
 // The gels used on race day (per gel).
 export const RACE_GEL = { carbsG: 24, sodiumMg: 100, everyMin: 30 }; // everyMin: chosen spacing in the race
+// Taken with each gel during the race.
+export const RACE_SALT_CHEW = { sodiumMg: 100, potassiumMg: 30, perGel: 1 };
+// Pre-race electrolyte drink, 2–3 hours before the start.
+export const RACE_PRELOAD = { name: "Re-Lyte", sodiumMg: 810, potassiumMg: 400 };
 
 export const RACE_PACING = {
   intro:

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { RACE_PACING, RACE_GEL } from "../data/nutrition.js";
+import { RACE_PACING, RACE_GEL, RACE_SALT_CHEW, RACE_PRELOAD } from "../data/nutrition.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { buildWatchPlan, fmtClock, planAsText, GEL_INTERVALS } from "../utils/watchPlan.js";
 
@@ -13,7 +13,7 @@ export default function WatchPlanCard() {
   const [stored, setGelEvery] = useLocalStorage("orca.watchPlan.gelMin", RACE_GEL.everyMin);
   const gelEvery = GEL_INTERVALS.includes(stored) ? stored : RACE_GEL.everyMin;
   const [copied, setCopied] = useState(false);
-  const plan = useMemo(() => buildWatchPlan(RACE_PACING.segments, { gelEveryMin: gelEvery, gel: RACE_GEL }), [gelEvery]);
+  const plan = useMemo(() => buildWatchPlan(RACE_PACING.segments, { gelEveryMin: gelEvery, gel: RACE_GEL, chew: RACE_SALT_CHEW }), [gelEvery]);
   const f = plan.fuel;
   const fmtPace = (sec) => `${Math.floor(sec / 60)}:${String(Math.round(sec % 60)).padStart(2, "0")}`;
 
@@ -72,20 +72,18 @@ export default function WatchPlanCard() {
 
       {f && (
         <div className="wp-fuel">
-          <div><span className="lbl">Gels in race</span><b>{f.count}</b><span className="lbl">carry {f.count + 2} (pre-start + spare)</span></div>
+          <div><span className="lbl">Gels + chews</span><b>{f.count} + {f.chews}</b><span className="lbl">carry {f.count + 2} gels · ~{f.chews + 3} chews</span></div>
           <div className={f.carbsPerHour < 60 ? "warn" : ""}><span className="lbl">Carbs</span><b>{Math.round(f.carbsPerHour)} g/h</b><span className="lbl">{f.carbsG} g · aim 60–90</span></div>
-          <div className="warn"><span className="lbl">Sodium</span><b>{Math.round(f.sodiumPerHour)} mg/h</b><span className="lbl">{f.sodiumMg} mg · aim 300–600</span></div>
+          <div className={f.sodiumPerHour < 300 ? "warn" : ""}><span className="lbl">Sodium</span><b>{Math.round(f.sodiumPerHour)} mg/h</b><span className="lbl">gels + chews · aim 300–600</span></div>
         </div>
       )}
       {f && (
-        <div className="hint" style={{ margin: "-4px 0 14px" }}>
-          Each gel: {RACE_GEL.carbsG} g carbs, {RACE_GEL.sodiumMg} mg sodium. Take one extra 10–15 min before the
-          start, then one every {gelEvery} min, each with a few sips of water.{" "}
-          {f.carbsPerHour < 60
-            ? `At this spacing you're under the 60–90 g/h usually recommended for a ~3-hour race; every 20 min gets you there if your stomach has handled it in training.`
-            : `That's in the 60–90 g/h range recommended for a ~3-hour race. Only go this frequent if you've practised it on long runs.`}{" "}
-          The gels alone cover only part of your sodium, so take sports drink at aid stations (or a salt capsule), especially if it's warm.
-        </div>
+        <ol className="wp-routine">
+          <li><b>2–3 h before:</b> 1 scoop {RACE_PRELOAD.name} ({RACE_PRELOAD.sodiumMg} mg sodium, {RACE_PRELOAD.potassiumMg} mg potassium) in 16–20 oz water; finish by ~90 min before.</li>
+          <li><b>10–15 min before:</b> 1 gel with a few sips of water.</li>
+          <li><b>Every gel buzz (each {gelEvery} min):</b> 1 gel + {RACE_SALT_CHEW.perGel} salt chew + a few sips of water.</li>
+          <li><b>Aid stations:</b> drink to thirst; an extra chew only if it's warm or a cramp is starting.</li>
+        </ol>
       )}
 
       <table className="grid wp-steps">
