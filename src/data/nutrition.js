@@ -76,7 +76,7 @@ export const RACE_DAY = [
   {
     section: "During the race (26.2 mi)",
     rows: [
-      { when: "Carbs", what: "30–60 g carbs per hour — about one gel every 30–45 min. Start early (~mile 4–5), before you feel low." },
+      { when: "Carbs", what: "1 gel (24 g) 10–15 min before the start, then 1 every 30 min — around miles 4.6, 9.2, 13.5, 17.6 and 22.1 (your Watch buzzes at each). Take each with a few sips of water. Carry 7: pre-start, 5 in the race, 1 spare." },
       { when: "Fluids", what: "Drink to thirst at aid stations — small, frequent sips. Alternate water and sports drink. Favor electrolytes in heat; avoid over-drinking plain water." },
       { when: "Electrolytes", what: "Add salt/electrolyte caps if it's warm or you're a salty sweater. Late cramping is often sodium, not just fatigue." },
       { when: "Pacing", what: "Start conservative — first few miles slightly slower than goal pace. A negative split feels far better than blowing up at mile 20." },
@@ -92,40 +92,48 @@ export const RACE_DAY = [
   },
 ];
 
+// The gels used on race day (per gel).
+export const RACE_GEL = { carbsG: 24, sodiumMg: 100, everyMin: 30 }; // everyMin: chosen spacing in the race
+
 export const RACE_PACING = {
   intro:
-    "Updated after the Aug 29 tune-up half (raw 1:22:00, ~1:25:30 flat-course-equivalent once the downhill grade " +
-    "is backed out) — Riegel now predicts a flat marathon goal of about 6:48/mile instead of the earlier 7:20. " +
-    "Here's that new pace applied to each section — the course profile is still well-suited to a slightly " +
-    "negative-ish split around the midrace climb:",
+    "Sub-3 plan. Every range below is set so that even running its slowest pace, on every section, finishes in " +
+    "about 2:59:20, already allowing for the watch measuring the course ~0.6% long and a 30-second cushion. " +
+    "The course profile still suits a slightly negative-ish split around the midrace climb:",
   sections: [
     {
       range: "Miles 1–11",
       terrain: "net downhill, ~1000 ft loss",
-      note: "Hold 6:33–6:43/mile. Slightly faster than goal pace is fine here since gravity's helping, but don't dip into 6:10s chasing the downhill — you'll pay for it on the climb.",
+      note: "Hold 6:23–6:33/mile. Gravity is helping, so this should feel controlled, but don't dip into the 6:00s chasing the downhill — you'll pay for it on the climb.",
     },
     {
       range: "Miles 11–17",
       terrain: "sustained climb, ~900 ft gain",
-      note: "Plan on 7:18–7:43/mile, maybe touching 7:58 on the steepest stretch. That's 30–55 sec/mile slower than goal — expected and fine. Trying to hold 6:48 here is the classic way to blow up this course.",
+      note: "Ease to 7:12–7:32/mile. That's 40–60 sec/mile slower than the downhill and fully built into the sub-3 math. Trying to hold 6:30s here is the classic way to blow up this course.",
     },
     {
       range: "Hogsback / exposed rock spine",
       terrain: "within the climb stretch",
-      note: "No pace change beyond the climb adjustment above — just keep effort smooth and controlled rather than pushing on the exposed footing.",
+      note: "No pace change beyond the climb range above — keep effort smooth and controlled on the exposed footing.",
     },
     {
       range: "Miles 17–26.2",
       terrain: "net downhill, rolling",
-      note: "Target 6:38–6:48/mile. Legs will be tired from the climb, so this isn't a place to hammer sub-6:30s to \"make up time\" — just hold goal pace or slightly under.",
+      note: "Back to 6:28–6:38/mile. Legs will be tired from the climb; hold the range rather than hammering sub-6:20s to \"make up time\" — the time is already in the bank.",
     },
   ],
+  // The same sections as numbers, for the Watch workout plan (pace as m:ss per mile). These are
+  // the sub-3 ranges: the slow edges sum to ~2:59:20 over a GPS-padded 26.2.
+  segments: [
+    { from: 0, to: 11, lo: "6:23", hi: "6:33", terrain: "down" },
+    { from: 11, to: 17, lo: "7:12", hi: "7:32", terrain: "climb" },
+    { from: 17, to: 26.2, lo: "6:28", hi: "6:38", terrain: "down" },
+  ],
   summary:
-    "Rough math: if you run the first 11 at ~6:38, the climb (6 miles) at ~7:30, and the final 9.2 at ~6:43, you " +
-    "land right around 2:58–3:00 total — close to the new flat 6:48 average, just distributed to match the " +
-    "terrain instead of forcing even splits. This is a meaningfully faster goal than before, riding on one " +
-    "strong tune-up result and a Riegel extrapolation from half to full distance — treat it as a stretch goal " +
-    "and stay open to backing off toward the old ~7:20 pace if the climb or late miles aren't cooperating.",
+    "The math: middle of each range — ~6:28 for the first 11, ~7:22 up the climb, ~6:33 home — lands around " +
+    "2:56–2:57. Slowest edge of every range is still ~2:59:20. Stay inside the ranges (your Watch alerts enforce " +
+    "them) and sub-3 holds; the climb is where it's won or lost, so respect its range. With the Achilles this " +
+    "week, run by feel first: if the calf/Achilles complains, back off — no time goal is worth a DNF.",
 };
 
 export const GEAR = [

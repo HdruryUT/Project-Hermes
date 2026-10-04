@@ -1,9 +1,12 @@
 import { RACE_DAY, RACE_PACING } from "../data/nutrition.js";
 import courseMapImg from "../assets/course-map.jpg";
+import WatchPlanCard from "./WatchPlanCard.jsx";
 
 export default function RaceDayTab() {
   return (
     <div>
+      <WatchPlanCard />
+
       <div className="card">
         <h2>Course Map</h2>
         <div className="sub">Elevation profile and route for race day.</div>

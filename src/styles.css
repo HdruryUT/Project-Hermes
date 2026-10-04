@@ -463,3 +463,40 @@ table.grid td.when { font-weight: 700; color: var(--ink); white-space: nowrap; }
   .mode-label { display: none; }
   .mode-btn { padding: 0 11px; }
 }
+
+/* ---------- Race Watch Plan ---------- */
+.wp-controls { display: flex; flex-direction: column; gap: 0; margin-bottom: 4px; }
+.wp-controls .phase-picker { margin-bottom: 10px; }
+.wp-strip { position: relative; height: 46px; margin: 8px 0 4px; border-radius: 6px; overflow: visible; }
+.wp-sec {
+  position: absolute; top: 14px; height: 26px; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text); white-space: nowrap; overflow: hidden;
+  border: 1px solid var(--line);
+}
+.wp-sec.down { background: rgba(var(--accent-rgb), 0.16); }
+.wp-sec.climb { background: rgba(245, 192, 74, 0.22); border-color: rgba(245, 192, 74, 0.5); }
+.wp-sec:first-child { border-radius: 6px 0 0 6px; }
+.wp-sec:nth-last-of-type(1) { border-radius: 0 6px 6px 0; }
+.wp-gel { position: absolute; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; pointer-events: auto; }
+.wp-gel i { font-style: normal; font-size: 14px; line-height: 14px; filter: drop-shadow(0 0 4px rgba(245, 192, 74, 0.8)); }
+.wp-gel em { font-style: normal; font-size: 9.5px; color: var(--gold); margin-top: 28px; font-weight: 700; }
+.wp-axis { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); margin: 12px 0 14px; }
+.wp-steps tr.gel td:last-child { color: var(--gold); font-weight: 600; }
+.wp-steps tr.pace td:last-child { color: var(--text); font-weight: 600; }
+.wp-steps tr.finish td:last-child { color: var(--blue); font-weight: 700; }
+.wp-howto { margin: 0 0 12px; padding-left: 20px; font-size: 14px; line-height: 1.6; color: var(--text); }
+.wp-steps td:nth-child(2) b, .wp-steps td:nth-child(3) { white-space: nowrap; }
+@container panel (max-width: 540px) {
+  .wp-sec span { display: none; }
+  .wp-steps th, .wp-steps td { padding: 9px 7px; }
+}
+.wp-lock { border: 1px solid rgba(245, 192, 74, 0.45); background: rgba(245, 192, 74, 0.08); border-radius: 6px; padding: 10px 12px; font-size: 13px; line-height: 1.5; margin-bottom: 14px; }
+.wp-lock b { color: var(--gold); }
+.wp-fuel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.wp-fuel > div { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--card2); display: flex; flex-direction: column; }
+.wp-fuel b { font-family: var(--font-display); font-size: 18px; color: var(--ink); margin: 2px 0; }
+.wp-fuel .lbl { font-size: 11px; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); }
+.wp-fuel .warn b { color: var(--orange); }
+.watch-plan .hint { font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.wp-mile { font-family: var(--font-display); font-size: 17px; color: var(--ink); }
+.wp-setup { font-size: 11.5px; white-space: nowrap; }
