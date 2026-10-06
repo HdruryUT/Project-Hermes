@@ -136,9 +136,7 @@ export const PLAN = [
 ];
 
 // Body areas to keep an eye on, shown on the hologram's body map (amber) while active.
-export const BODY_WATCH = [
-  { area: "achilles", from: "2026-09-30", to: "2026-10-10", note: "Lower calf / Achilles on watch" },
-];
+export const BODY_WATCH = [];
 
 export function weeklyMiles(week) {
   return Object.values(week.days).reduce((s, d) => s + (d.miles || 0), 0);
