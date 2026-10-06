@@ -201,6 +201,15 @@ body {
   .menu-item:hover, .menu-item:focus-visible, .menu-item.active { padding-left: 12px; }
   .menu-item.active { border-bottom-color: var(--gold); }
   .stage { height: 58vh; min-height: 380px; }
+  .player-plate { min-width: 0; }
+  .player-name { font-size: 20px; letter-spacing: 2px; }
+  .player-tag { font-size: 10px; letter-spacing: 2.5px; }
+  .player-level { font-size: 15px; letter-spacing: 1px; }
+  .player-level span { font-size: 11px; }
+  .xp-bar { margin: 6px auto 4px; max-width: 180px; }
+  .xp-meta { font-size: 10px; }
+  .stage-hint { font-size: 9.5px; }
+  .body-note { font-size: 10px; padding: 2px 6px; }
   .panel { overflow: visible; border-left: none; border-top: 1px solid var(--line); padding: 18px 16px 40px; background: rgba(var(--bg-rgb), 0.86); }
 }
 
