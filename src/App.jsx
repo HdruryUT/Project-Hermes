@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { computeZones } from "./utils/paces.js";
-import { daysUntilRace, currentPosition, milesThroughWeek, totalPlannedMiles } from "./utils/schedule.js";
+import { daysUntilRace, currentPosition, totalPlannedMiles } from "./utils/schedule.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import { useStravaAutoSync } from "./hooks/useStravaAutoSync.js";
 import { bodyStatus } from "./utils/bodyStatus.js";
+import { weeklyActualMiles } from "./utils/log.js";
 import { setSoundEnabled, setTrack, unlockAudio, playHover, playSelect } from "./game/audio.js";
 import HermesLogo from "./components/HermesLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
@@ -98,8 +99,10 @@ export default function App() {
   const days = daysUntilRace();
   const pos = currentPosition();
   const level = pos.state === "before" ? 0 : pos.week.week;
-  const xpMiles = pos.state === "before" ? 0 : milesThroughWeek(pos.weekIndex);
   const xpTotal = totalPlannedMiles();
+  const xpMiles = pos.state === "before"
+    ? 0
+    : Math.min(xpTotal, Math.round(weeklyActualMiles(activities).reduce((s, m) => s + m, 0) * 10) / 10);
   const active = TABS.find((t) => t.id === tab);
   const activeIndex = TABS.indexOf(active);
 
