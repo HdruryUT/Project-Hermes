@@ -222,7 +222,7 @@ export default function App() {
             <div className="player-name" onClick={() => setDanceSignal((n) => n + 1)}>Drury</div>
             <div className="player-tag">Hero of Orem</div>
             <div className="player-level">
-              LVL {level} <span>· {pos.week.phase}</span>
+              WEEK {level} <span>· {pos.week.phase}</span>
             </div>
             <div className="xp-bar"><span style={{ width: `${Math.round((xpMiles / xpTotal) * 100)}%` }} /></div>
             <div className="xp-meta">Plan XP · {xpMiles} / {xpTotal} mi</div>
