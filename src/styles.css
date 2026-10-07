@@ -60,7 +60,7 @@ body {
 }
 
 /* ---------- Game shell ---------- */
-.arena-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; cursor: grab; touch-action: pan-y; }
+.arena-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; z-index: 0; cursor: grab; touch-action: none; }
 .arena-canvas.grabbing { cursor: grabbing; }
 .fx-vignette, .fx-scanlines { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
 .fx-vignette { background: radial-gradient(ellipse at 50% 45%, transparent 45%, rgba(var(--bg-rgb), 0.8) 100%); }
