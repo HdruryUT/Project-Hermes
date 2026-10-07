@@ -18,19 +18,21 @@ export default function RaceDayTab() {
       <div className="card">
         <h2>Race Pacing Plan</h2>
         <div className="sub">{RACE_PACING.intro}</div>
-        <table className="grid">
-          <tbody>
-            {RACE_PACING.sections.map((s) => (
-              <tr key={s.range}>
-                <td style={{ width: "26%" }}>
-                  <b>{s.range}</b>
-                  <div className="muted" style={{ fontSize: 12 }}>{s.terrain}</div>
-                </td>
-                <td>{s.note}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll">
+          <table className="grid">
+            <tbody>
+              {RACE_PACING.sections.map((s) => (
+                <tr key={s.range}>
+                  <td style={{ width: "26%" }}>
+                    <b>{s.range}</b>
+                    <div className="muted" style={{ fontSize: 12 }}>{s.terrain}</div>
+                  </td>
+                  <td>{s.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="callout silver" style={{ marginTop: 16 }}>{RACE_PACING.summary}</div>
       </div>
 
@@ -40,16 +42,18 @@ export default function RaceDayTab() {
         {RACE_DAY.map((block) => (
           <div key={block.section}>
             <div className="section-title">{block.section}</div>
-            <table className="grid">
-              <tbody>
-                {block.rows.map((r) => (
-                  <tr key={r.when}>
-                    <td className="when" style={{ width: "22%" }}>{r.when}</td>
-                    <td>{r.what}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="table-scroll">
+              <table className="grid">
+                <tbody>
+                  {block.rows.map((r) => (
+                    <tr key={r.when}>
+                      <td className="when" style={{ width: "22%" }}>{r.when}</td>
+                      <td>{r.what}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ))}
         <div className="callout silver" style={{ marginTop: 16 }}>

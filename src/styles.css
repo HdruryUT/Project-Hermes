@@ -217,8 +217,8 @@ body {
 .card {
   background: var(--card); border: 1px solid var(--line); border-radius: 16px;
   padding: 18px 20px; margin-bottom: 16px; box-shadow: var(--shadow);
-  max-width: 100%; overflow-x: auto;
 }
+.table-scroll { overflow-x: auto; max-width: 100%; }
 .card h2 { margin: 0 0 4px; font-size: 18px; color: var(--text); }
 .card .sub { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 .card-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
