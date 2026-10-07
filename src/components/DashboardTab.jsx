@@ -1,6 +1,6 @@
 import { DAY_NAMES, PHASE_COLOR, weeklyMiles, PLAN } from "../data/plan.js";
 import { zoneForWorkout, zonePace, fmtPace, fmtDuration } from "../utils/paces.js";
-import { currentPosition, totalPlannedMiles, milesThroughWeek, daysUntilRace } from "../utils/schedule.js";
+import { currentPosition, totalPlannedMiles, daysUntilRace } from "../utils/schedule.js";
 import { weeklyActualMiles } from "../utils/log.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { IconEating, IconGrocery, IconFlag, IconShirt } from "./icons.jsx";
@@ -22,12 +22,12 @@ export default function DashboardTab({ zones, goToTab }) {
   const { week, dayName, today, state } = pos;
   const days = daysUntilRace();
   const weekNo = week.week;
-  const doneMiles = milesThroughWeek(pos.weekIndex);
   const totalMiles = totalPlannedMiles();
-  const progressPct = Math.round((doneMiles / totalMiles) * 100);
 
   const [activities] = useLocalStorage("orca.activities", null);
   const [syncedAt] = useLocalStorage("orca.activities.syncedAt", null);
+  const doneMiles = Math.min(totalMiles, Math.round(weeklyActualMiles(activities).reduce((s, m) => s + m, 0) * 10) / 10);
+  const progressPct = Math.round((doneMiles / totalMiles) * 100);
   const cutoffWeek = state === "after" ? PLAN.length - 1 : state === "during" ? pos.weekIndex : -1;
   const actualSeries = activities && cutoffWeek >= 0
     ? weeklyActualMiles(activities).map((m, i) => (i <= cutoffWeek ? m : null))
@@ -143,10 +143,10 @@ export default function DashboardTab({ zones, goToTab }) {
       <div className="dash-two">
         <div className="card">
           <h2>Plan progress</h2>
-          <div className="sub">Week {weekNo} of 10 · {progressPct}% of planned miles scheduled so far</div>
+          <div className="sub">Week {weekNo} of 10 · {progressPct}% of planned miles run so far</div>
           <div className="progressbar"><span style={{ width: `${progressPct}%` }} /></div>
           <div className="progress-meta">
-            <span><b>{doneMiles}</b> mi through this week</span>
+            <span><b>{doneMiles}</b> mi run</span>
             <span><b>{totalMiles}</b> mi total plan</span>
           </div>
         </div>
