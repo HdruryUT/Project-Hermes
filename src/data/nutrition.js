@@ -78,9 +78,9 @@ export const RACE_DAY = [
   {
     section: "During the race (26.2 mi)",
     rows: [
-      { when: "Every Watch buzz", what: "Gel + 1 salt chew + a few sips of water — at miles 4.6, 9.2, 13.5, 17.6 and 22.1 (every 30 min, your usual ~4.5-mile rhythm). With the pre-start gel that's ~49 g carbs and ~375 mg sodium per hour; sip sports drink at aid stations in the last 10K for a little more. Carry 7 gels (pre-start, 5 in the race, 1 spare) and ~8 chews." },
+      { when: "Every Watch buzz", what: "Honey Stinger Watermelon Lime gel + a few sips of water — at miles 3.8, 7.7, 11.5, 14.8, 18.4 and 22.1 (every 25 min). Add 1 salt chew with every other gel (miles 7.7, 14.8 and 22.1). With the pre-start gel that's 7 gels, 168 g carbs — ~57 g carbs and ~340 mg sodium per hour. Sip sports drink at aid stations from about halfway for more carbs (~180–200 g total). If your stomach turns, skip a gel and drop to every 30 min. Carry 8 gels (pre-start, 6 in the race, 1 spare) and ~6 chews (3 + spares)." },
       { when: "Fluids", what: "Drink to thirst at aid stations — small, frequent sips. Alternate water and sports drink. Favor electrolytes in heat; avoid over-drinking plain water." },
-      { when: "Electrolytes", what: "1 salt chew (100 mg sodium, 30 mg potassium) with each gel is the default. Only add an extra chew if it's warm, you're caked in salt, or a cramp is starting. Drink to thirst — don't force plain water." },
+      { when: "Electrolytes", what: "Cool morning (50s): 1 salt chew (100 mg sodium, 30 mg potassium) with every other gel — the gels already carry 100 mg sodium each. Go to a chew with every gel if it warms up, you're caked in salt, or a cramp is starting. Drink to thirst — don't force plain water." },
       { when: "Pacing", what: "Start at the slow end of your 6:23–6:33 range for the first couple of miles and let it settle. Staying inside each range (your Watch alerts) is what keeps you under 3:00." },
     ],
   },
@@ -94,12 +94,13 @@ export const RACE_DAY = [
   },
 ];
 
-// The gels used on race day (per gel).
+// The gels used on race day (per gel): Honey Stinger Watermelon Lime electrolyte gel.
 // everyMin: spacing in the race (optionally tighter after lateAfterMin, every lateEveryMin — not
 // used now). preStart: one gel 10–15 min before the gun.
-export const RACE_GEL = { carbsG: 24, sodiumMg: 100, everyMin: 30, preStart: 1 };
-// Taken with each gel during the race.
-export const RACE_SALT_CHEW = { sodiumMg: 100, potassiumMg: 30, perGel: 1 };
+export const RACE_GEL = { name: "Honey Stinger Watermelon Lime", carbsG: 24, sodiumMg: 100, everyMin: 25, preStart: 1 };
+// Taken with every other gel during the race (gels 2, 4, 6) — enough for a cool (50s °F) morning
+// since the gels carry 100 mg sodium each. Set everyNthGel to 1 for a chew with every gel if it's warm.
+export const RACE_SALT_CHEW = { sodiumMg: 100, potassiumMg: 30, perGel: 1, everyNthGel: 2 };
 // Pre-race electrolyte drink, 2–3 hours before the start.
 export const RACE_PRELOAD = { name: "Re-Lyte", sodiumMg: 810, potassiumMg: 400 };
 
@@ -176,7 +177,7 @@ export const GEAR = [
   {
     group: "Fuel & tech",
     items: [
-      { name: "Energy gels / chews", note: "The number you practiced (≈5–7), in tested flavors." },
+      { name: "Energy gels / chews", note: "8 Honey Stinger Watermelon Lime gels (7 + a spare) and ~6 salt chews (3 + spares)." },
       { name: "Race belt / gel pockets", note: "Tested so it doesn't bounce or chafe." },
       { name: "Electrolyte / salt caps", note: "If you use them — pre-count the dose." },
       { name: "GPS watch", note: "Charged the night before, set to your pacing screen." },

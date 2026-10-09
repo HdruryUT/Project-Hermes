@@ -37,6 +37,8 @@ export function buildWatchPlan(sections, { gelEveryMin = 25, firstGelMin = gelEv
   // Walk the course in 0.01-mile steps at each section's mid pace (padded for GPS distance)
   // to find where each gel falls.
   const gels = [], lateGels = [];
+  // Salt chews go with every gel, or with every Nth one (gels N, 2N, …) when chew.everyNthGel is set.
+  const chewAt = (i) => !!chew && (i + 1) % (chew.everyNthGel || 1) === 0;
   let t = 0, nextGel = firstGelMin * 60, lateSpacing = false;
   for (let mi = 0; mi < RACE_MI; mi += 0.01) {
     t += sectionAt(mi).mid * 0.01 * SUB3.distanceFactor;
@@ -57,7 +59,7 @@ export function buildWatchPlan(sections, { gelEveryMin = 25, firstGelMin = gelEv
       // The extra gels from tighter late spacing are optional: take them only if the stomach
       // feels good (the last gel stays a regular one).
       const bonus = lateGels.includes(i) && i !== gels.length - 1;
-      const what = chew ? `Gel #${i + 1} + ${chew.perGel} salt chew` : `Gel #${i + 1}`;
+      const what = chewAt(i) ? `Gel #${i + 1} + ${chew.perGel} salt chew` : `Gel #${i + 1}`;
       return { mi, kind: "gel", bonus, label: bonus ? `Bonus: ${what} — only if your stomach feels good` : what };
     }),
     ...secs.slice(1).map((s) => ({
@@ -94,17 +96,19 @@ export function buildWatchPlan(sections, { gelEveryMin = 25, firstGelMin = gelEv
   // Fuel from the actual gels.
   const hours = expectedSec / 3600;
   // Carbs and sodium over the race, counting the pre-start gel (it fuels the first half hour)
-  // and the salt chews taken with each in-race gel.
+  // and the salt chews taken with the in-race gels.
   const pre = gel?.preStart || 0;
-  const sodiumPerGelStop = (gel?.sodiumMg || 0) + (chew ? chew.sodiumMg * chew.perGel : 0);
+  const chews = chew ? gels.filter((_, i) => chewAt(i)).length * chew.perGel : 0;
+  const sodiumMg = gel && (gels.length + pre) * gel.sodiumMg + (chew ? chews * chew.sodiumMg : 0);
   const fuel = gel && {
     count: gels.length,
     pre,
-    chews: chew ? gels.length * chew.perGel : 0,
+    chews,
+    chewEvery: chew ? chew.everyNthGel || 1 : 0,
     carbsG: (gels.length + pre) * gel.carbsG,
     carbsPerHour: ((gels.length + pre) * gel.carbsG) / hours,
-    sodiumMg: gels.length * sodiumPerGelStop + pre * gel.sodiumMg,
-    sodiumPerHour: (gels.length * sodiumPerGelStop + pre * gel.sodiumMg) / hours,
+    sodiumMg,
+    sodiumPerHour: sodiumMg / hours,
   };
   return { steps, gels, expectedSec, worstSec, sections: secs, fuel };
 }
@@ -114,11 +118,13 @@ export function fmtClock(sec) {
   return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
+const ordinal = (n) => (n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`);
+
 export function planAsText(plan, gelEveryMin) {
   const f = plan.fuel;
   const lines = [
     `RACE WATCH PLAN — sub-3 lock (worst case ${fmtClock(plan.worstSec)}, expected ≈${fmtClock(plan.expectedSec)})`,
-    f ? `Fuel: Re-Lyte 2–3 h before; 1 gel 10–15 min before the start; then at each gel buzz (every ${gelEveryMin} min): gel${f.chews ? " + 1 salt chew" : ""} + water (≈${Math.round(f.carbsPerHour)} g carbs/h, ≈${Math.round(f.sodiumPerHour)} mg sodium/h). Carry ${f.count + 2} gels${f.chews ? ` and ~${f.chews + 3} chews` : ""}.` : "",
+    f ? `Fuel: Re-Lyte 2–3 h before; 1 gel 10–15 min before the start; then at each gel buzz (every ${gelEveryMin} min): gel${f.chews ? (f.chewEvery > 1 ? ` (+ 1 salt chew with every ${ordinal(f.chewEvery)} gel)` : " + 1 salt chew") : ""} + water (≈${Math.round(f.carbsPerHour)} g carbs/h, ≈${Math.round(f.sodiumPerHour)} mg sodium/h). Carry ${f.count + 2} gels${f.chews ? ` and ~${f.chews + 3} chews` : ""}.` : "",
     "Apple Watch › Workout › Outdoor Run › ⋯ › Create Workout › Custom — one Work step per line (distance = the Watch step):",
     ...plan.steps.map((s) => `${s.n}. Mile ${s.to.toFixed(1)}: ${s.then} — pace ${s.paceLo}–${s.paceHi}/mi (Watch step: Work ${s.miles.toFixed(2)} mi)`),
     "Keep Auto-Pause OFF so stops at aid stations still count against the clock.",

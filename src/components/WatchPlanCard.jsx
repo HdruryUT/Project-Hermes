@@ -10,7 +10,7 @@ const pct = (mi) => `${(mi / RACE_MI) * 100}%`;
 // (gel, climb, finish), each with a pace alert — so the wrist does the coaching and the phone
 // stays in the pocket.
 export default function WatchPlanCard() {
-  const [stored, setGelEvery] = useLocalStorage("orca.watchPlan.gelMin", RACE_GEL.everyMin);
+  const [stored, setGelEvery] = useLocalStorage("orca.watchPlan.gelMin.v2", RACE_GEL.everyMin) // v2: drop choices saved under the old 30-min default;
   const gelEvery = GEL_INTERVALS.includes(stored) ? stored : RACE_GEL.everyMin;
   const [copied, setCopied] = useState(false);
   const plan = useMemo(() => buildWatchPlan(RACE_PACING.segments, { gelEveryMin: gelEvery, gel: RACE_GEL, chew: RACE_SALT_CHEW }), [gelEvery]);
@@ -81,7 +81,9 @@ export default function WatchPlanCard() {
         <ol className="wp-routine">
           <li><b>2–3 h before:</b> 1 scoop {RACE_PRELOAD.name} ({RACE_PRELOAD.sodiumMg} mg sodium, {RACE_PRELOAD.potassiumMg} mg potassium) in 16–20 oz water; finish by ~90 min before.</li>
           <li><b>10–15 min before:</b> 1 gel with a few sips of water.</li>
-          <li><b>Every gel buzz (each {gelEvery} min):</b> 1 gel + {RACE_SALT_CHEW.perGel} salt chew + a few sips of water.</li>
+          <li><b>Every gel buzz (each {gelEvery} min):</b> 1 gel + a few sips of water{f.chewEvery > 1
+            ? <>; add {RACE_SALT_CHEW.perGel} salt chew with every {f.chewEvery === 2 ? "other" : `${f.chewEvery}th`} gel (the buzzes marked "+ salt chew").</>
+            : <> + {RACE_SALT_CHEW.perGel} salt chew.</>}</li>
           <li><b>Aid stations:</b> drink to thirst; an extra chew only if it's warm or a cramp is starting.</li>
         </ol>
       )}
