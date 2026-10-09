@@ -88,22 +88,18 @@ export default function WatchPlanCard() {
         </ol>
       )}
 
-      <div className="table-scroll">
-        <table className="grid wp-steps">
-          <thead>
-            <tr><th>#</th><th>At mile</th><th>Pace alert</th><th>Buzz means…</th></tr>
-          </thead>
-          <tbody>
-            {plan.steps.map((s) => (
-              <tr key={s.n} className={s.kind}>
-                <td className="when">{s.n}</td>
-                <td><b className="wp-mile">{s.to.toFixed(1)}</b><div className="muted wp-setup">Watch step: {s.miles.toFixed(2)} mi</div></td>
-                <td>{s.paceLo}–{s.paceHi}/mi</td>
-                <td>{s.kind === "gel" ? "⚡ " : s.kind === "finish" ? "🏁 " : "⛰ "}{s.then}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="wp-steps">
+        {plan.steps.map((s) => (
+          <div className={`wp-step ${s.kind}`} key={s.n}>
+            <div className="wp-step-row">
+              <span className="wp-step-n">{s.n}</span>
+              <b className="wp-mile">{s.to.toFixed(1)} mi</b>
+              <span className="wp-step-pace">{s.paceLo}–{s.paceHi}/mi</span>
+            </div>
+            <div className="wp-setup">Watch step: {s.miles.toFixed(2)} mi</div>
+            <div className="wp-step-then">{s.kind === "gel" ? "⚡ " : s.kind === "finish" ? "🏁 " : "⛰ "}{s.then}</div>
+          </div>
+        ))}
       </div>
 
       <div className="section-title">Set it up on your Watch (about 5 minutes, the night before)</div>
