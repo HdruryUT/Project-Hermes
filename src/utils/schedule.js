@@ -47,3 +47,8 @@ export function daysUntilRace(now = new Date()) {
   const race = atMidnight(new Date(RACE_DATE + "T00:00:00"));
   return Math.max(0, Math.ceil((race - atMidnight(now)) / 86400000));
 }
+
+// True once race day is behind us.
+export function raceIsRun(now = new Date()) {
+  return atMidnight(now) > atMidnight(new Date(RACE_DATE + "T00:00:00"));
+}

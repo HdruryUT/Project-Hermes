@@ -1,16 +1,26 @@
-# Project Hermes — Marathon Training App
+# El Coyote — Marathon Training App
 
-The app is styled like a video-game character screen in a neon Greek temple: a 3D arena
-renders behind everything (your character turning on a pedestal), the tabs are the main menu,
-and each tab opens in the panel on the right. A black cat wanders the arena.
+The app is styled after a ranch-outfitter cap — brown canvas, orange rope, cream embroidery
+thread — over a 3D desert: your character turns on a sandstone rock ringed by a lasso, with
+saguaros, a campfire and mesas behind, where a coyote howls from the mesa top. A black cat in a
+cowboy hat wanders the scene (tap the player name for its secret dance).
 
-Two modes, switched in the top bar, each with its own look and soundtrack:
-- **Blue** — cyan neon, a French-house track (four-on-the-floor, disco bass, pumping filtered chords, robot lead) generated in the browser.
-- **Red** — Spartan red, an original choral-orchestral track played from real recordings
-  (`public/audio/spartan/`, ~2 MB, downloaded the first time red is chosen).
+Two times of day, switched in the top bar, each with its own look and soundtrack:
+- **Day** — golden hour, the cap's orange accent; "Desert Ride", early-'70s desert folk-rock
+  (12-string guitars on a two-chord vamp, bongos, a fingerpicked lead, hummed harmonies).
+- **Night** — moonlight, a turquoise accent; "Coyote Moon", a spaghetti-western piece
+  (tremolo guitar, a lonely whistle, and a coyote howling).
 
-Music only starts after a click (browser rule); the **Sound** button mutes it. Asset credits are
-in `public/audio/spartan/CREDITS.txt`, `public/models/CREDITS.txt` and the app footer.
+A third option, **Auto**, follows the real sun where you are (it asks for your location once
+and falls back to Orem): golden hour while the sun is up, blending through dusk to moonlight.
+
+The first visit in a session opens with a camera sweep over the mesas (click to skip). With
+sound on, a campfire crackles under the music, with wind by day and crickets at night. Your race
+result shows in the header and on the Dashboard: set it in `RACE_RESULT` in `src/data/plan.js`.
+
+Both soundtracks are synthesized live in the browser (no audio files). Music only starts after a
+click (browser rule); the **Sound** button mutes it. The cat model's credit is in
+`public/models/CREDITS.txt` and the app footer.
 
 A local React app for your October 10, 2026 marathon. Tabs: **Dashboard, Schedule, Strength,
 Fuel Calc, Eating, Grocery, Gear, Race Day, Log,** and **Paces & Strava**. It personalizes every
@@ -43,7 +53,7 @@ Vite (build `npm run build`, output `dist`). Deploy. Every future `git push` red
 
 ## Your 3D character
 
-Until you add a scan of yourself, the pedestal shows a hologram stand-in. To use your own body:
+Until you add a scan of yourself, the rock shows a hologram stand-in (in a cowboy hat). To use your own body:
 
 1. **Capture a scan** with a phone 3D-scanning app — e.g. Polycam, Scaniverse or KIRI Engine.
    Stand still, arms slightly away from your sides, while someone walks a slow full circle
@@ -51,7 +61,7 @@ Until you add a scan of yourself, the pedestal shows a hologram stand-in. To use
 2. **Export as GLB** (`.glb`). If the app offers it, reduce/decimate the mesh so the file is
    ideally under ~20 MB — it downloads every time the app opens.
 3. **Save it as `public/models/me.glb`.** Reload — the app finds it automatically, scales it to
-   the pedestal and swaps out the hologram. Any height/units/orientation from the app is fine.
+   the rock and swaps out the hologram. Any height/units/orientation from the app is fine.
 
 Heads-up: anything in `public/` is served publicly once deployed. `me.glb` is in `.gitignore`
 so your scan stays on your machine; remove that line if you do want it on the live site.
@@ -113,18 +123,21 @@ api/                      Vercel serverless functions (only live once deployed)
 
 public/models/me.glb      your 3D scan (optional, git-ignored — see "Your 3D character")
 public/models/cat.glb     the cat model (CC-BY 3.0, credited)
-public/audio/spartan/     orchestra + choir samples for the red track (CC0)
+public/favicon.svg        the El Coyote patch logo
 
 src/
 ├─ main.jsx
 ├─ App.jsx                game shell: HUD bar, menu, stage, panel, countdown, pace state
-├─ styles.css             neon Greek game theme (CSS variables) + per-tab styles
+├─ styles.css             El Coyote theme (Day/Night CSS variables) + per-tab styles
 ├─ game/
-│  ├─ scene.js            three.js arena: temple colonnade, pedestal, hologram/scan, bloom, modes
-│  ├─ cat.js              the roaming black cat (procedural walk/trot/sit on a rigged model)
+│  ├─ scene.js            three.js desert: sky, mesas, howling coyote, saguaros, campfire, rock, lasso, hologram/scan
+│  ├─ hat.js              the cowboy hat (worn by the hologram and the cat)
+│  ├─ cat.js              the roaming black cat (procedural walk/trot/sit/dance on a rigged model)
 │  ├─ Arena.jsx           mounts the scene and frames the figure on the stage area
-│  ├─ tracks.js           the two soundtracks (French-house "Messenger", sampled "Spartan")
-│  └─ audio.js            playback, crossfading between tracks, menu sounds
+│  ├─ tracks.js           the two synthesized soundtracks ("Desert Ride", "Coyote Moon")
+│  ├─ audio.js            playback, crossfading between tracks, menu sounds
+│  ├─ ambience.js         campfire crackle, wind and crickets under the music
+│  └─ tumbleweed.js       tumbleweeds blowing across the desert
 ├─ data/
 │  ├─ plan.js             the 10-week schedule + phase colors
 │  ├─ strength.js         periodized strength + plyometric program (phases follow the plan)
@@ -133,11 +146,12 @@ src/
 │  ├─ paces.js            Riegel predictor + training-pace zones
 │  ├─ fuel.js             carb/fluid/sodium estimator for long runs
 │  ├─ schedule.js         "where am I in the plan today" + race countdown helpers
-│  └─ log.js              matches synced Strava runs to plan weeks (planned vs. actual mileage)
+│  ├─ log.js              matches synced Strava runs to plan weeks (planned vs. actual mileage)
+│  └─ sun.js              sun height at a time and place (for the Auto time of day)
 ├─ services/strava.js     Strava fetch (manual token + connect-once backend) + demo data
 ├─ hooks/useLocalStorage.js
 └─ components/
-   ├─ HermesLogo.jsx      winged Hermes mark
+   ├─ CoyoteLogo.jsx      the coyote patch logo
    ├─ DashboardTab.jsx    home: countdown, today, this week, progress, paces
    ├─ MileageChart.jsx    weekly planned-mileage chart with actual-miles overlay
    ├─ LogTab.jsx          Training Log: weekly actual vs. target + recent-run feed
@@ -152,7 +166,8 @@ src/
 - Meals, grocery, race-day, gear → `src/data/nutrition.js`
 - How paces are derived → `computeZones` in `src/utils/paces.js`
 - Colors / theme → CSS variables at the top of `src/styles.css`
-- 3D arena (columns, pedestal, lighting) → `src/game/scene.js`; music → `src/game/audio.js`
+- 3D desert (sky, mesas, props, lighting per time of day) → `THEME` in `src/game/scene.js`;
+  music → `src/game/tracks.js`
 
 ## Notes
 

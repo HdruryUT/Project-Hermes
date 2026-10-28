@@ -1,13 +1,14 @@
 // Soundtrack playback + menu blips, generated live with the Web Audio API (no audio files).
-// Two tracks (see tracks.js) — one per colour mode — crossfade when the mode changes.
+// Two tracks (see tracks.js) — one per time of day — crossfade when the mode changes.
 // Browsers only allow audio after a user gesture, so nothing plays until the sound toggle is
 // clicked — or, if it was left on last visit, until the first click/keypress on the page.
 import { createTrack } from "./tracks.js";
+import { createAmbience } from "./ambience.js";
 
 const LOOKAHEAD = 0.12;
 
-let ctx = null, master, sfx;
-let enabled = false, current = "blue";
+let ctx = null, master, sfx, ambience;
+let enabled = false, current = "day";
 const players = {}; // track name → { out, track, timer, step, nextTime }
 
 // iOS 17+: treat this as media playback, so it isn't muted by the ring/silent switch.
@@ -38,7 +39,7 @@ function init() {
   setPlaybackSession();
   ctx = new (window.AudioContext || window.webkitAudioContext)();
   // A safety limiter: catches only peaks near full scale, so the soundtracks keep their
-  // quiet-to-loud contrast (a lower threshold flattens the red track's build).
+  // quiet-to-loud contrast.
   master = ctx.createDynamicsCompressor();
   master.threshold.value = -3;
   master.knee.value = 2;
@@ -49,6 +50,9 @@ function init() {
   sfx = ctx.createGain();
   sfx.gain.value = 0.5;
   sfx.connect(master);
+  // Campfire, wind and crickets under the music.
+  ambience = createAmbience(ctx, master);
+  ambience.setMode(current, 0);
 }
 
 function player(name) {
@@ -79,7 +83,7 @@ function fade(p, to, seconds) {
 function start(name) {
   const p = player(name);
   p.wanted = true;
-  // Sample-based tracks begin once their recordings have downloaded (a second or two, once).
+  // A track starts once it's ready (both are synthesized, so that's immediate).
   p.track.ready.then(
     () => {
       if (!p.wanted) return;
@@ -142,12 +146,14 @@ export function setSoundEnabled(on) {
   enabled = on;
   if (!on) {
     Object.keys(players).forEach(stop);
+    ambience?.stop();
     return;
   }
   init();
   ctx.resume().catch(() => {});
   if (ctx.state !== "running") resumeOnGesture();
   start(current);
+  ambience.start();
 }
 
 // The beat of whatever is playing, so things can move in time with it:
@@ -160,27 +166,43 @@ export function musicClock() {
   return { bpm: 60 / beatDur, beat: (ctx.currentTime - p.t0) / beatDur };
 }
 
-// Switch soundtrack ("blue" | "red"), crossfading if music is playing.
+// Switch soundtrack ("day" | "night"), crossfading if music is playing.
 export function setTrack(name) {
   current = name;
+  ambience?.setMode(name);
   if (!enabled || !ctx) return;
   Object.keys(players).filter((n) => n !== name).forEach(stop);
   start(name);
 }
 
-function blip(freqs, len, peak) {
-  if (!enabled || !ctx || ctx.state !== "running") return;
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator(), g = ctx.createGain();
-  o.type = "triangle";
-  freqs.forEach((f, i) => o.frequency.setValueAtTime(f, t + (i * len) / freqs.length));
-  g.gain.setValueAtTime(0.0001, t);
-  g.gain.exponentialRampToValueAtTime(peak, t + 0.003);
-  g.gain.exponentialRampToValueAtTime(0.0001, t + 0.003 + len);
-  o.connect(g).connect(sfx);
-  o.start(t);
-  o.stop(t + len + 0.05);
+// Menu sounds: a hollow woodblock tick on hover, and a spur's jingle on select — a few
+// inharmonic metal partials ringing out, the second rowel a beat behind the first.
+function ready() {
+  return enabled && ctx && ctx.state === "running";
 }
 
-export const playHover = () => blip([1320], 0.05, 0.06);
-export const playSelect = () => blip([660, 990], 0.12, 0.12);
+function tone(freq, t, peak, decay, type = "sine", drop = 1) {
+  const o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, t);
+  if (drop !== 1) o.frequency.exponentialRampToValueAtTime(freq * drop, t + decay * 0.5);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + 0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+  o.connect(g).connect(sfx);
+  o.start(t);
+  o.stop(t + decay + 0.02);
+}
+
+export function playHover() {
+  if (!ready()) return;
+  tone(1250, ctx.currentTime, 0.07, 0.05, "sine", 0.8);
+}
+
+export function playSelect() {
+  if (!ready()) return;
+  const t = ctx.currentTime;
+  for (const [dt, k] of [[0, 1], [0.07, 0.7]]) {
+    for (const [f, p, d] of [[2730, 0.05, 0.35], [4150, 0.035, 0.25], [5610, 0.025, 0.18], [7020, 0.015, 0.12]]) tone(f * (1 + dt), t + dt, p * k, d);
+  }
+}

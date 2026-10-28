@@ -1,5 +1,5 @@
-// A black cat that roams the arena: wanders in from off-screen, circles the pedestal, stops to
-// look around or sit, then pads off into the dark and comes back a while later.
+// A black cat in a cowboy hat that roams the desert: wanders in from off-screen, circles the
+// rock, stops to look around or sit, then pads off into the scrub and comes back a while later.
 //
 // The model (public/models/cat.glb — "Cat" by J-Toastie, CC-BY 3.0, via Poly Pizza) only ships
 // an idle clip, so all movement is procedural on its skeleton:
@@ -14,14 +14,19 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { musicClock } from "./audio.js";
+import { buildCowboyHat } from "./hat.js";
 
 const URL = "/models/cat.glb";
 const HEIGHT = 0.36;       // standing height to ear tips, metres (the figure is 1.8 m)
+// Hat placement on the head, as fractions of HEIGHT: ahead of the head bone, below the ear tips;
+// tilt (radians) tips the front up — negative pulls the brim down over the eyes, so the dark
+// underside never shows as a halo when the cat looks up.
+const HAT_AT = { forward: 0.05, below: 0.035, tilt: -0.12 };
 const ORBIT_R = 1.95;      // walking circle around the pedestal (its dashed ring is at 1.68)
 const WALK = { speed: 0.42, duty: 0.64, amp: 0.38, phases: { LH: 0, LF: 0.25, RH: 0.5, RF: 0.75 } };
 const TROT = { speed: 0.95, duty: 0.5, amp: 0.5, phases: { LF: 0, RH: 0, RF: 0.5, LH: 0.5 } };
 // Places to vanish to / appear from: just past the sides of the stage (behind the menu and
-// panel on desktop, off-screen on phones), or back into the dark between the columns.
+// panel on desktop, off-screen on phones), or back into the scrub behind the rock.
 const OFFSTAGE = [
   [-4.5, 2.4], [4.5, 2.4], [-4.8, 0.4], [4.8, 0.4], [-2.9, -5.5], [2.9, -5.5], [-1.2, -7], [1.2, -7],
 ];
@@ -81,6 +86,19 @@ export function createCat(scene, { reduceMotion = false } = {}) {
   root.add(shadow);
 
   let bones = null, rest = null, legLen = 0.15, sitDrop = 0, danceDrop = 0, disposed = false, model = null;
+  let hat = null, hatAt = null, hatAhead = null;
+  const hatP = new THREE.Vector3(), hatF = new THREE.Vector3();
+  // Put the hat on the head: at the head's hat spot, facing where the head faces (with half its
+  // nod), but always upright.
+  function placeHat() {
+    if (!hat) return;
+    root.updateMatrixWorld(true);
+    root.worldToLocal(hatAt.getWorldPosition(hatP));
+    root.worldToLocal(hatAhead.getWorldPosition(hatF)).sub(hatP);
+    hat.position.copy(hatP);
+    const flat = Math.hypot(hatF.x, hatF.z);
+    hat.rotation.set(-Math.atan2(hatF.y, flat) * 0.5 - HAT_AT.tilt, Math.atan2(hatF.x, hatF.z), 0, "YXZ");
+  }
   const q = new THREE.Quaternion(), X = new THREE.Vector3(1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
 
   new GLTFLoader().load(URL, (gltf) => {
@@ -126,6 +144,26 @@ export function createCat(scene, { reduceMotion = false } = {}) {
       eye.position.copy(head.worldToLocal(wp));
       eye.scale.setScalar(1 / head.getWorldScale(new THREE.Vector3()).x); // keep the eye's size in metres
     }
+
+    // Cowboy hat: brown felt, orange band (the El Coyote cap's colours), set on the crown between
+    // the ears. Two markers ride on the head bone — where the hat sits and a point just ahead of
+    // it — and each frame the hat follows them (see placeHat). It isn't parented to the head
+    // itself: the rig's look-around axis rolls the head sideways, which would tip the hat over.
+    const top = new THREE.Box3().setFromObject(model).max.y;
+    hat = buildCowboyHat({
+      brimR: HEIGHT * 0.17, crownR: HEIGHT * 0.075, crownH: HEIGHT * 0.115,
+      felt: new THREE.MeshStandardMaterial({ color: 0x5e3b22, roughness: 0.95 }),
+      band: new THREE.MeshStandardMaterial({ color: 0xe8913a, roughness: 0.8 }),
+    });
+    hatAt = new THREE.Object3D();
+    hatAt.position.set(hp.x + HEIGHT * HAT_AT.forward, top - HEIGHT * HAT_AT.below, hp.z);
+    hatAhead = new THREE.Object3D();
+    hatAhead.position.copy(hatAt.position).x += HEIGHT * 0.2;
+    for (const o of [hatAt, hatAhead]) {
+      o.updateMatrixWorld(true);
+      head.attach(o);
+    }
+    root.add(hat);
 
     // How far the sit pose drops the body, so the seated cat rests on the floor.
     applyPose({ sit: 1 });
@@ -351,7 +389,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     addPose(SIT_POSE, sitW);
     addPose(DANCE_POSE, danceW);
     // The dance is the Gangnam Style "horse dance", on the music's beat when it's playing
-    // (double-time for the slow red track; ~132 BPM otherwise, the song's own tempo).
+    // (double-time for the slow night track; ~132 BPM otherwise, the song's own tempo).
     let beat = t * 2.2, bounce = 0, sway = 0;
     if (danceW > 0.01) {
       const clock = musicClock();
@@ -425,6 +463,7 @@ export function createCat(scene, { reduceMotion = false } = {}) {
     add("tail1", "z", -0.15 * moveW);
 
     commit();
+    placeHat();
   }
 
   // Dev-only handle for inspecting the cat from the console / tests.

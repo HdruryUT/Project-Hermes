@@ -3,20 +3,23 @@ import { createArena } from "./scene.js";
 
 // Full-viewport WebGL canvas behind the app. The figure is framed on `stageRef`'s box, so it
 // sits in the gap between the menu and the panel and follows layout changes.
-export default function Arena({ stageRef, onModel, mode, danceSignal = 0, bodyMap = null }) {
+// `mix` is how far toward night the desert is lit (0 day → 1 night; between = dusk), and
+// `intro` plays the opening camera sweep on mount (turning it off mid-way skips the rest).
+export default function Arena({ stageRef, onModel, mix = 0, intro = false, danceSignal = 0, bodyMap = null }) {
   const canvasRef = useRef(null);
   const arenaRef = useRef(null);
-  const modeRef = useRef(mode);
+  const mixRef = useRef(mix);
+  const introRef = useRef(intro);
   const bodyMapRef = useRef(bodyMap);
   bodyMapRef.current = bodyMap;
-  modeRef.current = mode;
+  mixRef.current = mix;
   const onModelRef = useRef(onModel);
   onModelRef.current = onModel;
 
   useEffect(() => {
     let arena;
     try {
-      arena = createArena(canvasRef.current, { onModel: (v) => onModelRef.current?.(v), mode: modeRef.current });
+      arena = createArena(canvasRef.current, { onModel: (v) => onModelRef.current?.(v), mix: mixRef.current, intro: introRef.current });
       arenaRef.current = arena;
       if (bodyMapRef.current) arena.setBodyMap(bodyMapRef.current);
     } catch (err) {
@@ -47,8 +50,12 @@ export default function Arena({ stageRef, onModel, mode, danceSignal = 0, bodyMa
   }, [stageRef]);
 
   useEffect(() => {
-    arenaRef.current?.setMode(mode);
-  }, [mode]);
+    arenaRef.current?.setMix(mix);
+  }, [mix]);
+
+  useEffect(() => {
+    if (!intro) arenaRef.current?.skipIntro();
+  }, [intro]);
 
   useEffect(() => {
     if (bodyMap) arenaRef.current?.setBodyMap(bodyMap);

@@ -1,10 +1,13 @@
-// 10-week marathon training plan — Project Hermes
+// 10-week marathon training plan — El Coyote
 // Race day: Saturday, October 10, 2026. Plan starts Monday, August 3, 2026.
 // Each day: { type, miles, label, ... }
 // type drives which pace zone is shown: easy | recovery | long | tempo | intervals | shakeout | race | rest | xt
 
 export const RACE_DATE = "2026-10-10";
 export const PLAN_START = "2026-08-03";
+
+// How race day went — shown in the header and on the Dashboard once the race is run.
+export const RACE_RESULT = { race: "Escalante Marathon", place: 1 };
 
 export const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -142,13 +145,13 @@ export function weeklyMiles(week) {
   return Object.values(week.days).reduce((s, d) => s + (d.miles || 0), 0);
 }
 
-// Phase → accent color (Hermes gold/bronze palette).
+// Phase → accent color (saddle leather, ochre and chili — the El Coyote palette).
 export const PHASE_COLOR = {
-  Base: "#9c6b0a",
-  Build: "#9c6b0a",
-  Cutback: "#f4b740",
-  Recovery: "#f4b740",
-  Peak: "#ef6c4d",
-  Taper: "#f4b740",
-  "Race week": "#ef6c4d",
+  Base: "#8a5a2e",
+  Build: "#8a5a2e",
+  Cutback: "#b0862c",
+  Recovery: "#b0862c",
+  Peak: "#c0462c",
+  Taper: "#b0862c",
+  "Race week": "#c0462c",
 };

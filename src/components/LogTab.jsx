@@ -20,7 +20,7 @@ function WeekRow({ w }) {
       <div className="mi-head">
         <span className="mi-week">Week {w.week}</span>
         <span className="mi-dates muted">{w.dates}</span>
-        <span className="phase-pill" style={{ background: PHASE_COLOR[w.phase] || "var(--blue)" }}>{w.phase}</span>
+        <span className="phase-pill" style={{ background: PHASE_COLOR[w.phase] || "var(--accent)" }}>{w.phase}</span>
         {badgeLabel && <span className={`log-badge ${cls}`}>{badgeLabel}</span>}
       </div>
       <div className="progressbar"><span style={{ width: `${Math.min(100, pct ?? 0)}%` }} /></div>

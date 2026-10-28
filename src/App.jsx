@@ -1,12 +1,14 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { computeZones } from "./utils/paces.js";
-import { daysUntilRace, currentPosition, totalPlannedMiles } from "./utils/schedule.js";
+import { daysUntilRace, currentPosition, totalPlannedMiles, raceIsRun } from "./utils/schedule.js";
+import { sunElevation, nightness, DEFAULT_PLACE } from "./utils/sun.js";
+import { RACE_RESULT } from "./data/plan.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import { useStravaAutoSync } from "./hooks/useStravaAutoSync.js";
 import { bodyStatus } from "./utils/bodyStatus.js";
 import { weeklyActualMiles } from "./utils/log.js";
 import { setSoundEnabled, setTrack, unlockAudio, playHover, playSelect } from "./game/audio.js";
-import HermesLogo from "./components/HermesLogo.jsx";
+import CoyoteLogo from "./components/CoyoteLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
 import ScheduleTab from "./components/ScheduleTab.jsx";
 import EatingTab from "./components/EatingTab.jsx";
@@ -18,9 +20,6 @@ import FuelCalcTab from "./components/FuelCalcTab.jsx";
 import StrengthTab from "./components/StrengthTab.jsx";
 import LogTab from "./components/LogTab.jsx";
 import { IconHome, IconCalendar, IconEating, IconGrocery, IconFlag, IconShirt, IconGauge, IconDroplet, IconDumbbell, IconLog } from "./components/icons.jsx";
-
-// Greek numerals for the menu: Α, Β, Γ … (Ϛ is the archaic sign for 6).
-const NUMERALS = ["Α", "Β", "Γ", "Δ", "Ε", "Ϛ", "Ζ", "Η", "Θ", "Ι"];
 
 // three.js is big — load the 3D arena separately so the menu and panel paint immediately.
 const Arena = lazy(() => import("./game/Arena.jsx"));
@@ -38,28 +37,51 @@ const TABS = [
   { id: "paces", label: "Paces & Strava", Icon: IconGauge },
 ];
 
-// Colour mode — each recolours the arena + UI and has its own soundtrack (src/game/tracks.js).
+// Time of day — each relights the desert + recolours the UI and has its own soundtrack
+// (src/game/tracks.js). Auto follows the real sun where you are, dusk and all.
 const MODES = [
-  { id: "blue", label: "Blue", title: "Blue mode · Messenger soundtrack" },
-  { id: "red", label: "Red", title: "Red mode · Spartan soundtrack" },
+  { id: "day", label: "Day", title: "Day · golden hour · Desert Ride soundtrack" },
+  { id: "night", label: "Night", title: "Night · moonlight · Coyote Moon soundtrack" },
+  { id: "auto", label: "Auto", title: "Auto · follows the real sun where you are" },
 ];
+
+const SunIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <circle cx="12" cy="12" r="4.5" fill="currentColor" />
+    <path d="M12 2.5v2.5M12 19v2.5M2.5 12h2.5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" />
+  </svg>
+);
+const MoonIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor" /></svg>
+);
+// Auto: the sun half-set on the horizon.
+const HorizonIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+    <path d="M6.5 16a5.5 5.5 0 0 1 11 0Z" fill="currentColor" />
+    <path d="M2.5 19.5h19M12 4.5v2.5M4.6 8.6l1.8 1.8M19.4 8.6l-1.8 1.8" />
+  </svg>
+);
+const MODE_ICON = { day: SunIcon, night: MoonIcon, auto: HorizonIcon };
 
 function ModeToggle({ mode, onSelect }) {
   return (
     <div className="mode-toggle" role="radiogroup" aria-label="Colour mode and soundtrack">
-      {MODES.map((m) => (
+      {MODES.map((m) => {
+        const Icon = MODE_ICON[m.id];
+        return (
         <button
           key={m.id}
           role="radio"
           aria-checked={mode === m.id}
-          className={`mode-btn ${m.id} ${mode === m.id ? "active" : ""}`}
+          className={`mode-btn mode-${m.id} ${mode === m.id ? "active" : ""}`}
           onClick={() => onSelect(m.id)}
           title={m.title}
         >
-          <span className="mode-dot" aria-hidden="true" />
+          <span className="mode-dot" aria-hidden="true"><Icon /></span>
           <span className="mode-label">{m.label}</span>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -79,7 +101,44 @@ export default function App() {
   );
   const [effort, setEffort] = useLocalStorage("orca.effort", null);
   const [sound, setSound] = useLocalStorage("orca.sound", false);
-  const [mode, setMode] = useLocalStorage("orca.mode", "blue");
+  const [storedMode, setMode] = useLocalStorage("orca.mode", "day");
+  // Saves from before the desert theme hold "blue" / "red".
+  const choice = MODES.some((m) => m.id === storedMode) ? storedMode : "day";
+  // Auto: how far the real sun has set where you are, re-checked every minute.
+  const [place, setPlace] = useLocalStorage("orca.place", null);
+  const [minute, setMinute] = useState(0);
+  useEffect(() => {
+    if (choice !== "auto") return;
+    const id = setInterval(() => setMinute((n) => n + 1), 60 * 1000);
+    return () => clearInterval(id);
+  }, [choice]);
+  const sceneMix = useMemo(
+    () => (choice === "auto" ? nightness(sunElevation(new Date(), place || DEFAULT_PLACE)) : choice === "night" ? 1 : 0),
+    [choice, place, minute]
+  );
+  // The UI and the soundtrack flip at the middle of dusk.
+  const mode = sceneMix > 0.5 ? "night" : "day";
+  // Opening shot: once per visit, and never for reduced motion.
+  const [intro, setIntro] = useState(() => {
+    try {
+      return !sessionStorage.getItem("orca.introSeen") && !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (!intro) return;
+    try { sessionStorage.setItem("orca.introSeen", "1"); } catch { /* private mode */ }
+    const done = setTimeout(() => setIntro(false), 5600);
+    const skip = () => setIntro(false);
+    window.addEventListener("pointerdown", skip, { once: true });
+    window.addEventListener("keydown", skip, { once: true });
+    return () => {
+      clearTimeout(done);
+      window.removeEventListener("pointerdown", skip);
+      window.removeEventListener("keydown", skip);
+    };
+  }, [intro]);
   const [hasScan, setHasScan] = useState(false);
   const [danceSignal, setDanceSignal] = useState(0); // secret: tap the player name
   useStravaAutoSync();
@@ -97,6 +156,7 @@ export default function App() {
 
   const zones = computeZones(effort);
   const days = daysUntilRace();
+  const raceRun = raceIsRun();
   const pos = currentPosition();
   const level = pos.state === "before" ? 0 : pos.week.week;
   const xpTotal = totalPlannedMiles();
@@ -109,7 +169,7 @@ export default function App() {
   // Track first, so turning sound on (possibly in the same render) starts the right song.
   useEffect(() => {
     document.documentElement.dataset.mode = mode;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", mode === "red" ? "#0a0405" : "#040812");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", mode === "night" ? "#0e0f1b" : "#24160e");
     setTrack(mode);
   }, [mode]);
 
@@ -123,6 +183,14 @@ export default function App() {
     playSelect();
     setMode(id);
     if (!sound) setSound(true);
+    // Auto asks where you are (once); without an answer it uses Orem.
+    if (id === "auto" && !place && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (p) => setPlace({ lat: +p.coords.latitude.toFixed(2), lon: +p.coords.longitude.toFixed(2) }),
+        () => {},
+        { maximumAge: 24 * 3600 * 1000, timeout: 15000 }
+      );
+    }
   }
 
   useEffect(() => {
@@ -162,33 +230,46 @@ export default function App() {
   }
 
   return (
-    <div className="game">
+    <div className={`game ${intro ? "intro" : ""}`}>
       <Suspense fallback={null}>
-        <Arena stageRef={stageRef} onModel={setHasScan} mode={mode} danceSignal={danceSignal} bodyMap={body.levels} />
+        <Arena stageRef={stageRef} onModel={setHasScan} mix={sceneMix} intro={intro} danceSignal={danceSignal} bodyMap={body.levels} />
       </Suspense>
       <div className="fx-vignette" aria-hidden="true" />
-      <div className="fx-scanlines" aria-hidden="true" />
+      <div className="fx-grain" aria-hidden="true" />
+      {intro && (
+        <div className="intro-title" aria-hidden="true">
+          <span>El Coyote</span>
+          <small>Marathon Provisions Co.</small>
+        </div>
+      )}
 
       <header className="hud-top">
         <div className="brand">
-          <HermesLogo size={40} />
+          <CoyoteLogo size={44} />
           <div>
-            <h1><span className="h1-pre">Project </span>Hermes</h1>
-            <div className="tagline">Marathon training companion</div>
+            <h1>El Coyote</h1>
+            <div className="tagline">Marathon Provisions Co.</div>
           </div>
         </div>
         <div className="hud-race">
-          <span className="hud-label">Race day</span>
+          <span className="hud-label">{raceRun ? RACE_RESULT.race : "Race day"}</span>
           <span className="hud-value">Sat · Oct 10 2026</span>
         </div>
-        <div className="hud-countdown">
-          <span className="hud-label">T-minus</span>
-          <b>{String(days).padStart(2, "0")}</b>
-          <span className="hud-label">days</span>
-        </div>
+        {raceRun ? (
+          <div className="hud-countdown hud-result" title={`${RACE_RESULT.race} — ${RACE_RESULT.place === 1 ? "winner" : "finished"}`}>
+            <b>{RACE_RESULT.place === 1 ? "1st" : "Done"}</b>
+            <span className="hud-label">{RACE_RESULT.place === 1 ? "place" : ""}</span>
+          </div>
+        ) : (
+          <div className="hud-countdown">
+            <span className="hud-label">T-minus</span>
+            <b>{String(days).padStart(2, "0")}</b>
+            <span className="hud-label">days</span>
+          </div>
+        )}
         <div className="hud-right">
           <span className={`chip ${zones ? "ok" : ""}`}>{zones ? "Paces calibrated" : "Paces not set"}</span>
-          <ModeToggle mode={mode} onSelect={selectMode} />
+          <ModeToggle mode={choice} onSelect={selectMode} />
           <SoundToggle
             on={sound}
             onToggle={() => {
@@ -201,7 +282,7 @@ export default function App() {
 
       <div className="game-body">
         <nav className="game-menu" onKeyDown={onMenuKey} aria-label="Sections">
-          <div className="menu-heading">Choose your path</div>
+          <div className="menu-heading">Pick your trail</div>
           {TABS.map((t, i) => (
             <button
               key={t.id}
@@ -211,7 +292,6 @@ export default function App() {
               onMouseEnter={() => tab !== t.id && playHover()}
               aria-current={tab === t.id ? "page" : undefined}
             >
-              <span className="menu-num">{NUMERALS[i]}</span>
               <t.Icon size={17} />
               <span className="menu-label">{t.label}</span>
             </button>
@@ -223,7 +303,7 @@ export default function App() {
           <div className="player-plate">
             {/* Secret: tapping the name toggles the cat's dance. */}
             <div className="player-name" onClick={() => setDanceSignal((n) => n + 1)}>Drury</div>
-            <div className="player-tag">Hero of Orem</div>
+            <div className="player-tag">Coyote of Orem</div>
             <div className="player-level">
               WEEK {level} <span>· {pos.week.phase}</span>
             </div>
@@ -242,7 +322,7 @@ export default function App() {
 
         <main className="panel" ref={panelRef}>
           <div className="panel-head">
-            <span className="panel-num"><span>{NUMERALS[activeIndex]}</span></span>
+            <span className="panel-num"><active.Icon size={22} /></span>
             <div>
               <h2 className="panel-title">{active.label}</h2>
             </div>
@@ -260,10 +340,8 @@ export default function App() {
             {tab === "paces" && <SettingsTab effort={effort} onSetEffort={setEffort} />}
           </div>
           <div className="footer">
-            Project Hermes · swift as the messenger · your data stays in this browser
-            <div className="credits">
-              Cat model by J-Toastie (CC-BY 3.0, via Poly Pizza) · Orchestra samples: VSCO 2 CE (CC0) · Choirs: ShangusBurger, Uzbazur on Freesound (CC0)
-            </div>
+            El Coyote · run the sendero · your data stays in this browser
+            <div className="credits">Cat model by J-Toastie (CC-BY 3.0, via Poly Pizza)</div>
           </div>
         </main>
       </div>

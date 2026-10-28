@@ -1,21 +1,46 @@
 // The two soundtracks, synthesized with the Web Audio API (no audio files). Each track is built
 // on a given AudioContext and output node, so the same code runs live or in an offline render.
 //
-//   blue — "Messenger": French house / disco-funk — four-on-the-floor, disco bass, pumping
-//          filtered chords and a robotic vocoder-style lead (synthesized live).
-//   red  — "Spartan": an original choral-orchestral piece in F# Phrygian played on real
-//          recordings (public/audio/spartan — CC0 VSCO 2 orchestra + CC0 Freesound choirs):
-//          a choir-led opening over a held F# (ison), a drum-driven drop with the choir
-//          receding, a quiet choral breath, then a heavy climax of low choir, brass and drums.
+//   day   — "Desert Ride": early-'70s desert folk-rock — two 12-string acoustics on an
+//           Em ↔ D6add9/F# vamp, round bass, bongos and shaker, a fingerpicked lead, hummed oohs.
+//   night — "Coyote Moon": a slow spaghetti-western piece in A minor over Am–G–F–E — twangy
+//           tremolo guitar with slapback echo, a heartbeat drum, a lonely whistle, and a
+//           coyote howling at the end of each pass.
+//
+// Plucked strings are Karplus–Strong: a burst of noise circulating in a short, slightly damped
+// delay line, rendered into a buffer (a few takes per note) and cached. In the day track each
+// instrument also rings through a model of its body, and the timing and touch are loosened.
 //
 // createTrack(name, ctx, out, opts) → { ready, stepDur, loopSteps, level, play(step, time) }
-// `ready` resolves once any samples are loaded; play() is called once per 16th note, slightly
-// ahead of time, by the scheduler in audio.js. opts.loadSample(name) → ArrayBuffer overrides
-// how samples are fetched (used for offline renders in Node).
+// play() is called once per 16th note, slightly ahead of time, by the scheduler in audio.js.
 
 export const midiHz = (n) => 440 * Math.pow(2, (n - 69) / 12);
 
-// Noise and a reverb impulse, made once per context.
+// Reverb impulse: a few early reflections off nearby walls, then a diffuse tail that gets darker
+// as it dies away (air and soft surfaces soak up the highs first), decorrelated left and right.
+function makeIR(ctx, seconds, { darken = 1 } = {}) {
+  const sr = ctx.sampleRate, len = Math.floor(sr * seconds);
+  const ir = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = ir.getChannelData(ch);
+    for (let k = 0; k < 9; k++) {
+      const at = Math.floor(sr * (0.006 + Math.random() * 0.045));
+      d[at] += (Math.random() < 0.5 ? -1 : 1) * (0.7 - k * 0.06);
+    }
+    let lp = 0;
+    const start = Math.floor(sr * 0.012);
+    for (let i = start; i < len; i++) {
+      const u = i / len;
+      const a = Math.min(0.96, 0.15 + u * darken * 1.1); // one-pole lowpass closing over time
+      lp = a * lp + (1 - a) * (Math.random() * 2 - 1);
+      const fadeIn = Math.min(1, (i - start) / (sr * 0.02));
+      d[i] += lp * Math.exp((-6.9 * i) / len) * fadeIn * 1.6;
+    }
+  }
+  return ir;
+}
+
+// Noise, reverbs and the pluck cache, made once per context.
 const shared = new WeakMap();
 function resources(ctx) {
   let r = shared.get(ctx);
@@ -23,17 +48,56 @@ function resources(ctx) {
   const noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
   const d = noise.getChannelData(0);
   for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-
-  const len = Math.floor(ctx.sampleRate * 3.5);
-  const ir = ctx.createBuffer(2, len, ctx.sampleRate);
-  for (let ch = 0; ch < 2; ch++) {
-    const data = ir.getChannelData(ch);
-    for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.8);
-  }
-  r = { noise, ir };
+  r = { noise, ir: makeIR(ctx, 3.2), room: makeIR(ctx, 1.1, { darken: 0.8 }), plucks: new Map() };
   shared.set(ctx, r);
   return r;
 }
+
+// An instrument's wooden body (or banjo head) as an impulse response: the direct sound plus a
+// set of resonant modes ringing briefly — [frequency Hz, decay s, level]. Plucked or bowed
+// strings run through it, which is most of what makes them sound like a real instrument.
+function bodyIR(ctx, modes, { direct = 1, seconds = 0.25 } = {}) {
+  const sr = ctx.sampleRate, len = Math.floor(sr * seconds);
+  const buf = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    d[0] = direct;
+    for (const [f, decay, level] of modes) {
+      const ph = Math.random() * Math.PI * 2, fr = f * (1 + (ch ? 0.012 : -0.012));
+      const w = (2 * Math.PI * fr) / sr;
+      for (let i = 1; i < len; i++) d[i] += level * 0.02 * Math.sin(w * i + ph) * Math.exp(-i / (decay * sr));
+    }
+  }
+  return buf;
+}
+
+// A signal path for one instrument: body → tone shaping → stereo place → the mix and a reverb
+// send. Returns the node to play into.
+function instrument(ctx, out, reverb, { modes, direct, hp = 60, lp = 9000, pan = 0, send = 0.2, gain = 1, solo = false }) {
+  const input = ctx.createGain();
+  input.gain.value = solo ? 0 : gain; // `solo` here means "muted by someone else's solo"
+  const body = ctx.createConvolver();
+  body.normalize = false; // keep the direct sound at its own level; the modes only colour it
+  body.buffer = bodyIR(ctx, modes, { direct });
+  const hpf = ctx.createBiquadFilter();
+  hpf.type = "highpass";
+  hpf.frequency.value = hp;
+  const lpf = ctx.createBiquadFilter();
+  lpf.type = "lowpass";
+  lpf.frequency.value = lp;
+  const panner = ctx.createStereoPanner();
+  panner.pan.value = pan;
+  input.connect(body).connect(hpf).connect(lpf).connect(panner);
+  panner.connect(out);
+  const s = ctx.createGain();
+  s.gain.value = send;
+  panner.connect(s).connect(reverb);
+  return input;
+}
+
+// A little human looseness: timing (± seconds) and loudness (± fraction).
+const loose = (t, amt = 0.006) => t + (Math.random() - 0.5) * 2 * amt;
+const vary = (g, amt = 0.15) => g * (1 + (Math.random() - 0.5) * 2 * amt);
 
 function env(gainNode, t, peak, attack, release) {
   gainNode.gain.setValueAtTime(0.0001, t);
@@ -41,483 +105,569 @@ function env(gainNode, t, peak, attack, release) {
   gainNode.gain.exponentialRampToValueAtTime(0.0001, t + attack + release);
 }
 
-// Attack → hold → release envelope for sustained voices.
-function swell(gainNode, t, peak, attack, hold, release) {
-  const g = gainNode.gain;
-  g.setValueAtTime(0.0001, t);
-  g.linearRampToValueAtTime(peak, t + attack);
-  g.setValueAtTime(peak, t + attack + hold);
-  g.linearRampToValueAtTime(0.0001, t + attack + hold + release);
-}
-
 function noiseHit(ctx, dest, t, { type, freq, q = 1, peak, release }) {
   const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
   s.buffer = resources(ctx).noise;
+  s.loop = true;
   f.type = type;
   f.frequency.value = freq;
   f.Q.value = q;
   env(g, t, peak, 0.002, release);
   s.connect(f).connect(g);
   for (const d of [].concat(dest)) g.connect(d);
-  s.start(t);
+  s.start(t, Math.random() * 0.5);
   s.stop(t + release + 0.05);
 }
 
-export function createTrack(name, ctx, out, opts = {}) {
-  return name === "red" ? spartan(ctx, out, opts) : messenger(ctx, out);
+// ---- Karplus–Strong strings ------------------------------------------------
+
+// bright: how sharp the pick's attack is · damp: how fast the highs die (0.5 = classic KS) ·
+// decay: overall sustain · pick: where along the string it's plucked (near the bridge = nasal).
+const STRINGS = {
+  steel: { bright: 0.7, damp: 0.47, decay: 0.9968, dur: 2.4, pick: 0.17 },  // dreadnought guitar
+  twang: { bright: 0.9, damp: 0.5, decay: 0.9975, dur: 3.0, pick: 0.1 },    // baritone electric
+  bass: { bright: 0.3, damp: 0.5, decay: 0.9945, dur: 1.5, pick: 0.22 },    // upright bass
+  banjo: { bright: 0.95, damp: 0.4, decay: 0.991, dur: 1.2, pick: 0.09 },   // five-string banjo
+  mando: { bright: 0.85, damp: 0.44, decay: 0.9935, dur: 0.9, pick: 0.13 }, // mandolin
+};
+const VARIANTS = 3; // a few takes of each note, so repeats never sound copy-pasted
+
+function pluckBuffer(ctx, midi, kind) {
+  const cache = resources(ctx).plucks;
+  const id = `${kind}:${midi}:${Math.floor(Math.random() * VARIANTS)}`;
+  if (cache.has(id)) return cache.get(id);
+  const { bright, damp, decay, dur, pick } = STRINGS[kind];
+  const sr = ctx.sampleRate;
+  const N = Math.max(2, Math.round(sr / midiHz(midi)));
+  // Excitation: a burst of noise, smoothed for darker strings, then comb-filtered for where the
+  // pick strikes (that position's harmonics cancel — the nasal snap near the bridge).
+  const noise = new Float32Array(N);
+  let prev = 0;
+  for (let i = 0; i < N; i++) {
+    prev = prev * (1 - bright) + (Math.random() * 2 - 1) * bright;
+    noise[i] = prev;
+  }
+  const P = Math.max(1, Math.round(pick * N));
+  const ring = new Float32Array(N);
+  for (let i = 0; i < N; i++) ring[i] = noise[i] - noise[(i - P + N) % N];
+  const len = Math.floor(sr * dur);
+  const buf = ctx.createBuffer(1, len, sr);
+  const d = buf.getChannelData(0);
+  let peak = 0;
+  for (let i = 0; i < len; i++) {
+    const k = i % N;
+    const v = ring[k];
+    d[i] = v;
+    ring[k] = decay * ((1 - damp) * v + damp * ring[(k + 1) % N]);
+    peak = Math.max(peak, Math.abs(v));
+  }
+  for (let i = 0; i < len; i++) d[i] /= peak || 1;
+  // The loop filter adds `damp` samples of delay; retune so the note lands in pitch.
+  const entry = { buf, rate: (midiHz(midi) * (N + damp)) / sr };
+  cache.set(id, entry);
+  return entry;
 }
 
-// ---- Blue: "Messenger" -----------------------------------------------------
+function pluck(ctx, dest, t, midi, kind, { gain = 0.3, dur = null, cents = 0 } = {}) {
+  const { buf, rate } = pluckBuffer(ctx, midi, kind);
+  const s = ctx.createBufferSource(), g = ctx.createGain();
+  s.buffer = buf;
+  s.playbackRate.value = rate * Math.pow(2, cents / 1200);
+  g.gain.setValueAtTime(gain, t);
+  const end = dur != null ? Math.min(dur, buf.duration) : buf.duration;
+  if (dur != null) {
+    g.gain.setValueAtTime(gain, t + end);
+    g.gain.linearRampToValueAtTime(0.0001, t + end + 0.06); // fretting hand lets go
+  }
+  s.connect(g);
+  for (const d of [].concat(dest)) g.connect(d);
+  s.start(t);
+  s.stop(t + end + 0.08);
+}
 
-// French house / disco-funk: four-on-the-floor at 122 BPM, octave-jumping disco bass, lush
-// minor-9th chords that pump under the kick and sit behind a slowly opening filter, and a
-// robotic vocoder-style lead. 16 bars that build: filtered intro → filter opens → robot lead
-// → full groove with chord stabs.
-function messenger(ctx, out) {
-  const BPM = 122;
-  const STEP = 60 / BPM / 4;
-  const BAR = STEP * 16;
-  const { noise } = resources(ctx);
+// ---- Voices ----------------------------------------------------------------
 
-  // Am9 → Fmaj9 → Dm9 → E9, voiced for a warm disco pad. root = bass note (MIDI).
-  const CHORDS = [
-    { root: 45, voicing: [57, 60, 64, 67, 71] },
-    { root: 41, voicing: [53, 57, 60, 64, 67] },
-    { root: 38, voicing: [50, 53, 57, 60, 64] },
-    { root: 40, voicing: [52, 56, 59, 62, 66] },
-  ];
-  // Disco bass: [16th step, interval above the root]
-  const BASS = [[0, 0], [3, 12], [6, 0], [8, 12], [10, 0], [11, 7], [14, 12]];
-  const STABS = [3, 6, 10, 13];
-  // Robot lead, one 4-bar phrase: [step in phrase, MIDI note, length in steps] — original.
-  const LEAD = [
-    [0, 76, 6], [6, 74, 2], [8, 76, 4], [12, 79, 4],
-    [16, 81, 8], [24, 79, 4], [28, 76, 4],
-    [32, 77, 6], [38, 76, 2], [40, 74, 4], [44, 72, 4],
-    [48, 71, 8], [56, 68, 4], [60, 71, 4],
-  ];
-
-  // Chords and stabs run through the "filter house" lowpass and a pumping sidechain bus.
-  const pump = ctx.createGain();
-  const sweep = ctx.createBiquadFilter();
-  sweep.type = "lowpass";
-  sweep.Q.value = 5;
-  sweep.frequency.value = 350;
-  sweep.connect(pump).connect(out);
-
-  // Short room reverb for claps and the lead.
-  const room = ctx.createConvolver();
-  room.buffer = resources(ctx).ir;
-  const roomWet = ctx.createGain();
-  roomWet.gain.value = 0.12;
-  room.connect(roomWet).connect(out);
-
-  function kick(t) {
+// Whistle: a near-sine tone with a breathy edge, gliding from the previous note, with vibrato
+// that grows on held notes.
+function whistler(ctx, dest, { gain = 0.12 } = {}) {
+  let lastHz = null;
+  return (t, midi, len) => {
+    const f0 = midiHz(midi);
     const o = ctx.createOscillator(), g = ctx.createGain();
-    o.frequency.setValueAtTime(155, t);
-    o.frequency.exponentialRampToValueAtTime(48, t + 0.09);
-    env(g, t, 1.0, 0.002, 0.28);
-    o.connect(g).connect(out);
-    o.start(t);
-    o.stop(t + 0.35);
-    noiseHit(ctx, out, t, { type: "highpass", freq: 3000, peak: 0.12, release: 0.012 }); // beater click
-    // Sidechain: the chords duck on every kick and swell back — the French-house pump.
-    pump.gain.cancelScheduledValues(t);
-    pump.gain.setValueAtTime(0.25, t);
-    pump.gain.linearRampToValueAtTime(1, t + STEP * 3);
-  }
-
-  // Hand clap: three quick noise bursts, like several hands slightly out of sync.
-  function clap(t) {
-    for (const [dt, pk] of [[0, 0.32], [0.011, 0.3], [0.022, 0.4]]) {
-      noiseHit(ctx, [out, room], t + dt, { type: "bandpass", freq: 1300, q: 1.2, peak: pk, release: dt === 0.022 ? 0.16 : 0.012 });
-    }
-  }
-
-  const hat = (t, open) => noiseHit(ctx, out, t, { type: "highpass", freq: open ? 6500 : 8500, peak: open ? 0.4 : 0.16, release: open ? 0.13 : 0.03 });
-
-  function bass(t, note, len) {
-    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-    o.type = "sawtooth";
-    o2.type = "square";
-    o.frequency.value = o2.frequency.value = midiHz(note);
-    o2.detune.value = 6;
-    f.type = "lowpass";
-    f.Q.value = 7;
-    f.frequency.setValueAtTime(1400, t);
-    f.frequency.exponentialRampToValueAtTime(220, t + len * 0.8);
-    env(g, t, 0.15, 0.004, len);
-    o.connect(f);
-    o2.connect(f);
-    f.connect(g).connect(out);
-    for (const x of [o, o2]) {
-      x.start(t);
-      x.stop(t + len + 0.05);
-    }
-  }
-
-  // Lush pad: detuned saws on each chord tone, into the sweep filter → pump.
-  function chord(t, voicing, len, peak, attack) {
-    const g = ctx.createGain();
+    o.type = "sine";
+    const from = lastHz && Math.abs(Math.log2(lastHz / f0)) < 1 ? lastHz : f0 * 0.97;
+    o.frequency.setValueAtTime(from, t);
+    o.frequency.exponentialRampToValueAtTime(f0, t + 0.06);
+    lastHz = f0;
+    // vibrato
+    const lfo = ctx.createOscillator(), depth = ctx.createGain();
+    lfo.frequency.value = 5.6;
+    depth.gain.setValueAtTime(0, t);
+    depth.gain.linearRampToValueAtTime(f0 * 0.012, t + Math.min(len, 0.6));
+    lfo.connect(depth).connect(o.frequency);
+    o.connect(g);
+    // breath
+    const b = ctx.createBufferSource(), bf = ctx.createBiquadFilter(), bg = ctx.createGain();
+    b.buffer = resources(ctx).noise;
+    b.loop = true;
+    bf.type = "bandpass";
+    bf.frequency.value = f0 * 1.5;
+    bf.Q.value = 3;
+    bg.gain.value = 0.25;
+    b.connect(bf).connect(bg).connect(g);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(peak, t + attack);
-    g.gain.setValueAtTime(peak, t + len - 0.04);
-    g.gain.linearRampToValueAtTime(0.0001, t + len);
-    g.connect(sweep);
-    for (const n of voicing) {
-      for (const detune of [-9, 9]) {
-        const o = ctx.createOscillator();
-        o.type = "sawtooth";
-        o.frequency.value = midiHz(n);
-        o.detune.value = detune;
-        o.connect(g);
-        o.start(t);
-        o.stop(t + len + 0.02);
+    g.gain.linearRampToValueAtTime(gain, t + 0.05);
+    g.gain.setValueAtTime(gain, t + Math.max(0.06, len - 0.06));
+    g.gain.linearRampToValueAtTime(0.0001, t + len + 0.05);
+    for (const d of [].concat(dest)) g.connect(d);
+    const end = t + len + 0.1;
+    for (const x of [o, lfo, b]) { x.start(t); x.stop(end); }
+  };
+}
+
+// A coyote: one long rising-then-falling howl, or a run of short yips.
+function coyote(ctx, dest, t, { gain = 0.1, yips = 0 } = {}) {
+  const calls = yips ? Array.from({ length: yips }, (_, i) => ({ at: i * 0.17, dur: 0.13, lo: 620 + i * 30, hi: 980 + i * 40 })) : [{ at: 0, dur: 2.8, lo: 360, hi: 860 }];
+  for (const c of calls) {
+    const s = t + c.at;
+    const o = ctx.createOscillator(), o2 = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+    o.type = "sine";
+    o2.type = "triangle";
+    for (const x of [o, o2]) {
+      x.frequency.setValueAtTime(c.lo, s);
+      if (yips) {
+        x.frequency.exponentialRampToValueAtTime(c.hi, s + c.dur * 0.5);
+        x.frequency.exponentialRampToValueAtTime(c.lo * 1.1, s + c.dur);
+      } else {
+        x.frequency.exponentialRampToValueAtTime(c.hi, s + 0.7);
+        x.frequency.setValueAtTime(c.hi, s + 1.6);
+        x.frequency.exponentialRampToValueAtTime(c.hi * 0.92, s + 1.9);
+        x.frequency.exponentialRampToValueAtTime(c.lo * 1.2, s + c.dur);
       }
     }
+    o2.detune.value = 1200;
+    const o2g = ctx.createGain();
+    o2g.gain.value = 0.18;
+    // a wavering vibrato on the held part
+    const lfo = ctx.createOscillator(), depth = ctx.createGain();
+    lfo.frequency.value = 6.5;
+    depth.gain.value = yips ? 0 : 14;
+    lfo.connect(depth);
+    depth.connect(o.frequency);
+    depth.connect(o2.frequency);
+    f.type = "lowpass";
+    f.frequency.value = 2600;
+    o.connect(f);
+    o2.connect(o2g).connect(f);
+    f.connect(g);
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.linearRampToValueAtTime(gain, s + (yips ? 0.02 : 0.35));
+    g.gain.setValueAtTime(gain, s + c.dur * 0.7);
+    g.gain.linearRampToValueAtTime(0.0001, s + c.dur);
+    for (const d of [].concat(dest)) g.connect(d);
+    for (const x of [o, o2, lfo]) { x.start(s); x.stop(s + c.dur + 0.05); }
+  }
+}
+
+// opts.solo (offline mixing only): render just one part of the day track.
+export function createTrack(name, ctx, out, opts = {}) {
+  return name === "night" ? coyoteMoon(ctx, out) : desertRide(ctx, out, opts);
+}
+
+// Melody notes: [16th step within the phrase, MIDI note, length in steps].
+const find = (notes, k) => notes.find(([at]) => at === k);
+
+// ---- Day: "Desert Ride" ----------------------------------------------------
+
+// Early-'70s desert folk-rock: two 12-string acoustics strumming a hypnotic two-chord vamp
+// (Em ↔ D6add9/F#, the open E and B ringing through both) in a loping 16th groove, a round
+// bass, bongos and shaker, a fingerpicked acoustic lead, and soft hummed harmonies — the tunes
+// are our own. Close and dry, like a small studio. 20 bars: guitars → the lead → the hum.
+function desertRide(ctx, out, { solo = null } = {}) {
+  const BPM = 122;
+  const STEP = 60 / BPM / 4;
+
+  // Open-position voicings, low → high strings.
+  const EM = { bass: 40, chord: [40, 47, 52, 55, 59, 64] };   // 0 2 2 0 0 0
+  const D69 = { bass: 42, chord: [42, 45, 50, 57, 59, 64] };  // 2 0 0 2 0 0
+  const SECTIONS = [["intro", 4], ["verse", 8], ["chorus", 8]];
+  const FORM = SECTIONS.flatMap(([name, len]) => Array.from({ length: len }, (_, at) => ({ name, at, ch: at % 2 ? D69 : EM })));
+
+  // Strums per 16th: D = down (all strings), U = up (top four), u = a ghosted upstroke.
+  const GTR_A = ["D", null, null, "u", "D", null, "U", null, null, "u", "U", null, "D", null, "U", null];
+  const GTR_B = ["D", null, "U", null, "D", null, "U", null, "D", null, "U", null, "D", null, "U", "u"];
+
+  // Our own lines, in E Dorian: [16th step in the 8 bars, MIDI note, length in steps].
+  const LEAD = [
+    [4, 71, 4], [8, 69, 2], [10, 67, 6],
+    [16, 66, 4], [20, 69, 4], [24, 71, 8],
+    [36, 74, 4], [40, 71, 4], [44, 69, 4],
+    [48, 71, 12], [60, 69, 4],
+    [64, 67, 4], [68, 69, 4], [72, 71, 4], [76, 74, 4],
+    [80, 76, 8], [88, 74, 4], [92, 71, 4],
+    [96, 69, 6], [102, 67, 2], [104, 64, 8],
+    [112, 66, 4], [116, 64, 12],
+  ];
+  const HUM = [
+    [0, 71, 8], [8, 69, 8], [16, 69, 16],
+    [32, 71, 6], [38, 74, 2], [40, 71, 8], [48, 69, 16],
+    [64, 67, 8], [72, 69, 8], [80, 71, 16],
+    [96, 74, 8], [104, 71, 8], [112, 69, 16],
+  ];
+  // A diatonic third below, in E Dorian (E F# G A B C# D), for the hum's harmony.
+  const DORIAN = [4, 6, 7, 9, 11, 1, 2];
+  const thirdBelow = (n) => {
+    const deg = DORIAN.indexOf(n % 12);
+    if (deg < 0) return n - 3;
+    const to = DORIAN[(deg + 5) % 7];
+    return n - ((n % 12) - to + 12) % 12;
+  };
+
+  // A small, dry room.
+  const room = ctx.createConvolver();
+  room.buffer = resources(ctx).room;
+  const wet = ctx.createGain();
+  wet.gain.value = 0.35;
+  room.connect(wet).connect(out);
+
+  const DREAD = [[106, 0.035, 1], [212, 0.03, 0.6], [262, 0.025, 0.5], [430, 0.02, 0.4], [640, 0.018, 0.3], [1080, 0.014, 0.25], [2250, 0.01, 0.2], [3500, 0.008, 0.15]];
+  const gtrL = instrument(ctx, out, room, { solo: solo && solo !== "guitars", modes: DREAD, direct: 1, hp: 90, lp: 9000, pan: -0.6, send: 0.18, gain: 0.5 });
+  const gtrR = instrument(ctx, out, room, { solo: solo && solo !== "guitars", modes: DREAD.map(([f, d, l]) => [f * 1.04, d, l]), direct: 1, hp: 110, lp: 9500, pan: 0.6, send: 0.18, gain: 0.42 });
+  const lead = instrument(ctx, out, room, { solo: solo && solo !== "lead", modes: DREAD, direct: 1, hp: 120, lp: 7000, pan: 0.1, send: 0.3, gain: 1.3 });
+  const bass = instrument(ctx, out, room, {
+    solo: solo && solo !== "bass", modes: [[64, 0.04, 0.8], [118, 0.03, 0.6], [205, 0.025, 0.4], [340, 0.02, 0.25]],
+    direct: 1, hp: 35, lp: 900, pan: 0, send: 0.06, gain: 0.55,
+  });
+  const drums = ctx.createStereoPanner();
+  drums.pan.value = 0.3;
+  const drumLevel = ctx.createGain();
+  drumLevel.gain.value = solo && solo !== "drums" ? 0 : 1.6;
+  drumLevel.connect(drums);
+  drums.connect(out);
+  const ds = ctx.createGain();
+  ds.gain.value = 0.25;
+  drums.connect(ds).connect(room);
+  const voices = ctx.createGain();
+  voices.gain.value = solo && solo !== "hum" ? 0 : 1;
+  voices.connect(out);
+  const vs = ctx.createGain();
+  vs.gain.value = 0.5;
+  voices.connect(vs).connect(room);
+
+  // 12-string strum: each string is a pair — the four low ones with an octave string, the top
+  // two in unison — the pair a few ms and a few cents apart. That shimmer is the 12-string sound.
+  function strum12(dest, t, notes, { up = false, gain = 0.2, spread = 0.01, dur = null }) {
+    const order = up ? [...notes].reverse() : notes;
+    let at = loose(t, 0.005);
+    order.forEach((n, i) => {
+      const idx = notes.indexOf(n);
+      const g = vary(gain * (1 - i * 0.03), 0.12);
+      pluck(ctx, dest, at, n, "steel", { gain: g, dur, cents: -3 });
+      pluck(ctx, dest, at + 0.004, idx < 4 ? n + 12 : n, "steel", { gain: g * (idx < 4 ? 0.55 : 0.8), dur, cents: 4 });
+      at += spread * (0.7 + Math.random() * 0.6);
+    });
+  }
+  function guitar(dest, pattern, s, t, ch, level) {
+    const stroke = pattern[s];
+    if (!stroke) return;
+    const dur = STEP * 3.2; // strings ring until the next stroke damps them
+    if (stroke === "D") strum12(dest, t, ch.chord, { gain: (s % 4 === 0 ? 0.16 : 0.13) * level, spread: 0.011, dur });
+    else if (stroke === "U") strum12(dest, t, ch.chord.slice(-4), { up: true, gain: 0.09 * level, spread: 0.008, dur });
+    else strum12(dest, t, ch.chord.slice(-3), { up: true, gain: 0.04 * level, spread: 0.006, dur: STEP }); // ghost
   }
 
-  // Robot lead: a buzzy saw+square voice shaped by two vowel formant filters that glide from
-  // "oh" to "ah" across each note — the talk-box / vocoder colour. No vibrato: robotic.
-  function robot(t, note, len) {
-    const f0 = midiHz(note);
-    const src = [ctx.createOscillator(), ctx.createOscillator()];
-    src[0].type = "sawtooth";
-    src[1].type = "square";
-    src[1].detune.value = -1200; // octave below adds body
-    const mix = ctx.createGain();
-    mix.gain.value = 0.5;
-    const g = ctx.createGain();
+  // Bass: round and short, the root with a push into the next bar.
+  const BASS = { 0: [0, 5], 6: [0, 2], 8: [0, 3], 11: [12, 1], 12: [0, 2], 14: [7, 2] };
+  function bassNote(t, midi, steps) {
+    const at = loose(t, 0.004);
+    pluck(ctx, bass, at, midi, "bass", { gain: vary(0.6, 0.1), dur: steps * STEP * 0.92 });
+    noiseHit(ctx, bass, at, { type: "lowpass", freq: 240, peak: 0.25, release: 0.04 });
+  }
+
+  // Bongos: a tuned skin (fundamental + the drumhead's inharmonic overtone), a little pitch
+  // bend down as the head relaxes, and the slap of the hand.
+  function bongo(t, high, gain) {
+    const f = high ? 410 : 285;
+    for (const [mult, lvl, dec] of [[1, 1, high ? 0.12 : 0.17], [1.59, 0.35, 0.06]]) {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.frequency.setValueAtTime(f * mult * 1.12, t);
+      o.frequency.exponentialRampToValueAtTime(f * mult, t + 0.025);
+      env(g, t, gain * lvl, 0.002, dec);
+      o.connect(g).connect(drumLevel);
+      o.start(t);
+      o.stop(t + dec + 0.05);
+    }
+    noiseHit(ctx, drumLevel, t, { type: "bandpass", freq: high ? 3200 : 2300, q: 1.2, peak: gain * 0.35, release: 0.012 });
+  }
+  const shaker = (t, gain) => noiseHit(ctx, drumLevel, t, { type: "bandpass", freq: 7500, q: 0.7, peak: gain, release: 0.045 });
+  function kick(t, gain) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(90, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.1);
+    env(g, t, gain, 0.004, 0.22);
+    o.connect(g).connect(drumLevel);
+    o.start(t);
+    o.stop(t + 0.3);
+  }
+  const BONGOS = [[0, false, 0.2], [3, true, 0.1], [6, true, 0.15], [8, false, 0.17], [10, true, 0.11], [11, true, 0.08], [14, true, 0.15]];
+
+  // Fingerpicked lead: a single string with a pick-hand accent, and a slide up into the note
+  // now and then (a second, quieter pluck a step below, cut short).
+  function leadNote(t, midi, steps) {
+    const at = loose(t, 0.006);
+    if (steps >= 4 && Math.random() < 0.35) pluck(ctx, lead, at - 0.06, midi - 2, "steel", { gain: 0.18, dur: 0.055 });
+    pluck(ctx, lead, at, midi, "steel", { gain: vary(0.42, 0.1), dur: steps * STEP * 0.98 });
+  }
+
+  // Hummed "ooh": a breathy voice — a buzzy source through the vocal tract's formants for "oo",
+  // with a gentle scoop into each note, vibrato that blooms late, and air on top.
+  function hum(t, midi, steps, gain) {
+    const len = steps * STEP, f0 = midiHz(midi);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sawtooth";
+    o.frequency.setValueAtTime(f0 * 0.97, t);
+    o.frequency.exponentialRampToValueAtTime(f0, t + 0.09);
+    const vib = ctx.createOscillator(), vd = ctx.createGain();
+    vib.frequency.value = 5 + Math.random() * 0.5;
+    vd.gain.setValueAtTime(0, t);
+    vd.gain.linearRampToValueAtTime(f0 * 0.009, t + Math.min(len, 0.7));
+    vib.connect(vd).connect(o.frequency);
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.16, t + 0.02);
-    g.gain.setValueAtTime(0.16, t + len - 0.03);
-    g.gain.linearRampToValueAtTime(0.0001, t + len + 0.04);
-    for (const [fa, fb, q, lvl] of [[450, 750, 7, 1], [850, 1200, 9, 0.7], [2400, 2600, 6, 0.25]]) {
+    g.gain.linearRampToValueAtTime(gain, t + 0.08);
+    g.gain.setValueAtTime(gain, t + Math.max(0.1, len - 0.12));
+    g.gain.linearRampToValueAtTime(0.0001, t + len + 0.1);
+    for (const [f, q, lvl] of [[320, 6, 1], [780, 8, 0.4], [2500, 7, 0.05]]) {
       const bp = ctx.createBiquadFilter(), lg = ctx.createGain();
       bp.type = "bandpass";
+      bp.frequency.value = f * (1 + (Math.random() - 0.5) * 0.04);
       bp.Q.value = q;
-      bp.frequency.setValueAtTime(fa, t);
-      bp.frequency.linearRampToValueAtTime(fb, t + Math.min(len, 0.25));
       lg.gain.value = lvl * 3;
-      mix.connect(bp).connect(lg).connect(g);
+      o.connect(bp).connect(lg).connect(g);
     }
-    for (const o of src) {
-      o.frequency.setValueAtTime(f0 * 0.985, t);
-      o.frequency.exponentialRampToValueAtTime(f0, t + 0.03); // tiny scoop into the note
-      o.connect(mix);
-      o.start(t);
-      o.stop(t + len + 0.08);
-    }
-    g.connect(out);
-    g.connect(room);
+    const air = ctx.createBufferSource(), af = ctx.createBiquadFilter(), ag = ctx.createGain();
+    air.buffer = resources(ctx).noise;
+    air.loop = true;
+    af.type = "bandpass";
+    af.frequency.value = 1800;
+    af.Q.value = 0.6;
+    ag.gain.value = 0.12;
+    air.connect(af).connect(ag).connect(g);
+    g.connect(voices);
+    const end = t + len + 0.15;
+    for (const x of [o, vib]) { x.start(t); x.stop(end); }
+    air.start(t, Math.random() * 0.5);
+    air.stop(end);
   }
-
-  // Filter-house cutoff per bar: closed and murky → opens over the build → stays bright.
-  const CUTOFF = [350, 450, 600, 800, 1100, 1600, 2300, 3200, 4500, 5500, 6000, 4500, 6500, 7500, 7500, 5000];
 
   return {
     ready: Promise.resolve(),
     stepDur: STEP,
-    loopSteps: 16 * CUTOFF.length,
-    level: 0.75,
+    loopSteps: FORM.length * 16,
+    level: 0.8,
     play(i, t) {
       const bar = Math.floor(i / 16), s = i % 16;
-      const c = CHORDS[bar % CHORDS.length];
-      const intro = bar < 4, leadIn = bar >= 8, full = bar >= 12;
+      const { name, at, ch } = FORM[bar];
+      const intro = name === "intro";
 
-      if (s === 0) {
-        const next = CUTOFF[(bar + 1) % CUTOFF.length];
-        sweep.frequency.setValueAtTime(CUTOFF[bar], t);
-        sweep.frequency.exponentialRampToValueAtTime(next, t + BAR);
-        chord(t, c.voicing, BAR, 0.06, 0.03);
-      }
-      if (s % 4 === 0) kick(t);
-      if (!intro && (s === 4 || s === 12)) clap(t);
-      if (s % 4 === 2) hat(t, true);
-      else if (!intro || s % 2 === 0) hat(t, false);
+      // Guitars: the left one from the top, the right one joins after two bars.
+      guitar(gtrL, GTR_A, s, t, ch, 1);
+      if (!intro || at >= 2) guitar(gtrR, GTR_B, s, t, ch, 0.9);
+      if (intro && at < 2) return;
 
-      const b = BASS.find(([at]) => at === s);
-      if (b && (!intro || bar >= 2)) bass(t, c.root + b[1], STEP * (b[1] === 0 ? 1.8 : 1.3));
+      // Bass, hand drums and shaker.
+      const b = BASS[s];
+      if (b) bassNote(t, ch.bass + b[0], b[1]);
+      if (s === 0 || s === 8) kick(t, 0.3);
+      for (const [k, high, gain] of BONGOS) if (k === s) bongo(loose(t, 0.005), high, vary(gain, 0.15));
+      shaker(loose(t, 0.003), s % 4 === 2 ? 0.06 : s % 2 ? 0.022 : 0.036);
 
-      if (full && STABS.includes(s)) chord(t, c.voicing.map((n) => n + 12).slice(1), STEP * 0.9, 0.05, 0.005);
-
-      if (leadIn) {
-        const n = LEAD.find(([at]) => at === (bar % 4) * 16 + s);
-        if (n) robot(t, n[1], n[2] * STEP);
+      const k = at * 16 + s;
+      if (name === "verse") {
+        const n = find(LEAD, k);
+        if (n) leadNote(t, n[1], n[2]);
+      } else if (name === "chorus") {
+        const n = find(HUM, k);
+        if (n) {
+          hum(t, n[1], n[2], 0.11);
+          hum(t + 0.01, thirdBelow(n[1]), n[2], 0.08);
+        }
       }
     },
   };
 }
 
-// ---- Red: "Spartan" --------------------------------------------------------
+// ---- Night: "Coyote Moon" --------------------------------------------------
 
-// Sample sets: [file, MIDI pitch it sounds at] (measured, not taken from the filenames), or a
-// bare file name for unpitched percussion. Timpani pitches are approximate and get retuned.
-const SPARTAN_SAMPLES = {
-  bass_sus: [["bass_sus_1", 36], ["bass_sus_2", 40], ["bass_sus_3", 44]],
-  cello_sus: [["cello_sus_1", 50], ["cello_sus_2", 53], ["cello_sus_3", 57], ["cello_sus_4", 60], ["cello_sus_5", 64]],
-  viola_sus: [["viola_sus_1", 62], ["viola_sus_2", 65], ["viola_sus_3", 69], ["viola_sus_4", 72]],
-  violins_sus: [["violins_sus_1", 62], ["violins_sus_2", 66], ["violins_sus_3", 69], ["violins_sus_4", 72], ["violins_sus_5", 76]],
-  cello_spic: [["cello_spic_1", 36], ["cello_spic_2", 50], ["cello_spic_3", 53], ["cello_spic_4", 57]],
-  violin_solo: [["violin_solo_1", 67], ["violin_solo_2", 69], ["violin_solo_3", 72], ["violin_solo_4", 76], ["violin_solo_5", 79]],
-  horn: [["horn_1", 50], ["horn_2", 53], ["horn_3", 57], ["horn_4", 60]],
-  trombone: [["trombone_1", 46], ["trombone_2", 50], ["trombone_3", 53]],
-  tuba: [["tuba_1", 41], ["tuba_2", 46], ["tuba_3", 50]],
-  choir_ooh: [["choir_ooh", 47.96]], // one sustained note each, re-pitched into chords
-  choir_ahh: [["choir_ahh", 53.11]],
-  timpani: [["timpani_1", 29.85], ["timpani_3", 37.5]],
-  timpani_roll: [["timpani_roll_1", 35.5]],
-  bassdrum: ["bassdrum_1", "bassdrum_2"],
-  gong: ["gong_1"],
-  cymbal_cresc: ["cymbal_cresc_1"],
-};
-const CYMBAL_PEAK = 3.1; // seconds into cymbal_cresc_1 where the swell peaks
-
-const fetchSample = (name) =>
-  fetch(`/audio/spartan/${name}.m4a`).then((r) => {
-    if (!r.ok) throw new Error(`${name}: HTTP ${r.status}`);
-    return r.arrayBuffer();
-  });
-
-// Shift a MIDI note by octaves until it lies within [lo, hi].
-function fit(n, lo, hi) {
-  while (n < lo) n += 12;
-  while (n > hi) n -= 12;
-  return n;
-}
-
-function spartan(ctx, out, { loadSample = fetchSample } = {}) {
-  const BPM = 63;
+function coyoteMoon(ctx, out) {
+  const BPM = 66;
   const STEP = 60 / BPM / 4;
-  const BAR = STEP * 16;
 
-  // Four sections (in bars), following the shape of a cinematic choral piece:
-  //   choir  — a strong choir carries the melody alone: no bass, no drums
-  //   drive  — the drums drop and the beat picks up; low brass/strings enter; choir recedes
-  //   breath — back to the choir alone, softer
-  //   climax — loudest: heavy drums every bar, low brass, deep choir + horns on the main line
-  // then it cuts off and loops to the choir.
-  const SECTIONS = [["choir", 8], ["drive", 8], ["breath", 4], ["climax", 12]];
+  // Andalusian cadence: Am – G – F – E. arp = the guitar's 8th-note picking pattern.
+  const AM = { root: 33, arp: [45, 52, 57, 60, 64, 60, 57, 52], tremolo: [57, 60, 64] };
+  const G = { root: 31, arp: [43, 50, 55, 59, 62, 59, 55, 50], tremolo: [55, 59, 62] };
+  const F = { root: 29, arp: [41, 48, 53, 57, 60, 57, 53, 48], tremolo: [53, 57, 60] };
+  const E = { root: 28, arp: [40, 47, 52, 56, 59, 56, 52, 47], tremolo: [52, 56, 59] };
+  const PROG = [AM, G, F, E];
+  // Sections: intro (guitar + heartbeat), the whistled tune, then the howl.
+  const SECTIONS = [["intro", 4], ["tune", 8], ["howl", 4]];
   const STARTS = [];
   SECTIONS.reduce((bar, [, len]) => (STARTS.push(bar), bar + len), 0);
-  const TOTAL_BARS = SECTIONS.reduce((n, [, len]) => n + len, 0);
+  const TOTAL = SECTIONS.reduce((n, [, len]) => n + len, 0);
   const sectionAt = (bar) => {
-    for (let k = SECTIONS.length - 1; k >= 0; k--) if (bar >= STARTS[k]) return { name: SECTIONS[k][0], at: bar - STARTS[k], len: SECTIONS[k][1] };
+    for (let k = SECTIONS.length - 1; k >= 0; k--) if (bar >= STARTS[k]) return { name: SECTIONS[k][0], at: bar - STARTS[k] };
   };
 
-  // F# Phrygian (F# G A B C# D E) — the flat second (G) gives the ancient, Eastern-Mediterranean
-  // edge. Eight-bar progression: F#m → G → F#m → Em → D → Em → G → F#m.
-  const FSM = [42, 45, 49], G = [43, 47, 50], EM = [40, 43, 47], D = [38, 42, 45];
-  const PROG = [FSM, G, FSM, EM, D, EM, G, FSM]; // [root, third, fifth]
-
-  // [step within an 8-bar phrase, MIDI note, length in steps] — original lines.
-  const CHANT = [ // the choir's melody (choir + viola an octave up)
-    [0, 49, 8], [8, 54, 8], [16, 55, 12], [28, 54, 4], [32, 57, 8], [40, 55, 4], [44, 54, 4],
-    [48, 52, 16], [64, 54, 8], [72, 57, 8], [80, 59, 6], [86, 57, 2], [88, 55, 8],
-    [96, 55, 4], [100, 54, 4], [104, 52, 4], [108, 50, 4], [112, 49, 16],
+  const MELODY = [
+    [0, 69, 4], [4, 76, 12],
+    [16, 74, 4], [20, 72, 4], [24, 71, 4], [28, 74, 4],
+    [32, 72, 12], [44, 69, 4],
+    [48, 71, 8], [56, 68, 4], [60, 64, 4],
+    [64, 69, 4], [68, 72, 4], [72, 76, 8],
+    [80, 79, 6], [86, 77, 2], [88, 76, 4], [92, 74, 4],
+    [96, 72, 6], [102, 74, 2], [104, 72, 4], [108, 69, 4],
+    [112, 71, 4], [116, 68, 4], [120, 69, 8],
   ];
-  const ANTHEM = [ // climax line: horns + choir, violins an octave up
-    [0, 54, 8], [8, 49, 8], [16, 50, 16], [32, 49, 8], [40, 54, 8], [48, 55, 8], [56, 54, 4],
-    [60, 52, 4], [64, 54, 16], [80, 55, 8], [88, 59, 8], [96, 59, 8], [104, 57, 4], [108, 55, 4],
-    [112, 54, 16],
-  ];
-  const OSTINATO = [0, 0, 2, 0, 0, 0, 1, 2]; // cello spiccato 8ths, as chord-tone indices
 
-  // All parts mix into one bus (peaks are caught by the master limiter in audio.js).
-  const bus = ctx.createGain();
-  bus.connect(out);
-
-  const reverb = ctx.createConvolver();
-  reverb.buffer = resources(ctx).ir;
+  const hall = ctx.createConvolver();
+  hall.buffer = resources(ctx).ir;
   const wet = ctx.createGain();
-  wet.gain.value = 0.4;
-  reverb.connect(wet).connect(bus);
+  wet.gain.value = 0.42;
+  hall.connect(wet).connect(out);
 
-  const buffers = {};
-  const ready = Promise.all(
-    Object.values(SPARTAN_SAMPLES).flat().map((entry) => {
-      const name = Array.isArray(entry) ? entry[0] : entry;
-      return loadSample(name)
-        .then((data) => ctx.decodeAudioData(data))
-        .then((buf) => { buffers[name] = buf; });
-    })
-  );
+  // Twang guitar: tremolo → slapback echo → spring-ish hall.
+  const trem = ctx.createGain();
+  trem.gain.value = 0.7;
+  const lfo = ctx.createOscillator(), lfoDepth = ctx.createGain();
+  lfo.frequency.value = 5.2;
+  lfoDepth.gain.value = 0.3;
+  lfo.connect(lfoDepth).connect(trem.gain);
+  lfo.start();
+  const twangTone = ctx.createBiquadFilter();
+  twangTone.type = "peaking";
+  twangTone.frequency.value = 1800;
+  twangTone.gain.value = 5;
+  twangTone.connect(trem);
+  trem.connect(out);
+  trem.connect(hall);
+  const echo = ctx.createDelay(1);
+  echo.delayTime.value = STEP * 3;
+  const fb = ctx.createGain();
+  fb.gain.value = 0.3;
+  const echoTone = ctx.createBiquadFilter();
+  echoTone.type = "lowpass";
+  echoTone.frequency.value = 2200;
+  const echoOut = ctx.createGain();
+  echoOut.gain.value = 0.35;
+  trem.connect(echo);
+  echo.connect(echoTone).connect(fb).connect(echo);
+  echoTone.connect(echoOut).connect(out);
 
-  // Play `group` at `midi` (nearest sample, repitched), or an unpitched hit when midi is null.
-  function play(group, midi, t, { gain = 1, swellTo = null, dur = null, attack = 0.01, release = 0.5, send = 0.4, variant = 0, bright = false } = {}) {
-    const set = SPARTAN_SAMPLES[group];
-    let name, rate = 1;
-    if (midi == null) {
-      name = set[variant % set.length];
-    } else {
-      let best = set[0];
-      for (const s of set) if (Math.abs(s[1] - midi) < Math.abs(best[1] - midi)) best = s;
-      name = best[0];
-      rate = Math.pow(2, (midi - best[1]) / 12);
-    }
-    const buf = buffers[name];
-    if (!buf) return;
-    const src = ctx.createBufferSource(), g = ctx.createGain();
-    src.buffer = buf;
-    src.playbackRate.value = rate;
-    src.start(t); // before any stop() — stopping an unstarted source throws
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + attack);
-    if (dur != null) {
-      // Hold (or crescendo to swellTo) for the note's length, then release.
-      if (swellTo != null) g.gain.linearRampToValueAtTime(swellTo, t + dur);
-      else g.gain.setValueAtTime(gain, t + dur);
-      g.gain.linearRampToValueAtTime(0, t + dur + release);
-      src.stop(t + dur + release + 0.05);
-    }
-    if (bright) {
-      // Lift the presence range so the choir rings out rather than sounding muffled.
-      const shelf = ctx.createBiquadFilter();
-      shelf.type = "highshelf";
-      shelf.frequency.value = 1800;
-      shelf.gain.value = 9;
-      src.connect(shelf).connect(g);
-    } else {
-      src.connect(g);
-    }
-    g.connect(bus);
-    if (send > 0) {
-      const s = ctx.createGain();
-      s.gain.value = send;
-      g.connect(s).connect(reverb);
-    }
+  const whistle = whistler(ctx, [out, hall], { gain: 0.1 });
+
+  // Heartbeat: a low tom, "ba-dum".
+  function tom(t, gain) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(95, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.18);
+    env(g, t, gain, 0.004, 0.4);
+    o.connect(g);
+    g.connect(out);
+    g.connect(hall);
+    o.start(t);
+    o.stop(t + 0.5);
   }
 
-  const timp = (midi, t, gain) => play("timpani", fit(midi, 31, 40), t, { gain, send: 0.5 });
-  const sustain = { dur: BAR, release: 0.9 };
-
-  // Choir chord for one bar. `level` scales it: 1 = carrying the piece, ~0.35 = background.
-  // `low` puts the weight in the deep voices (climax).
-  function choirChord([root, third, fifth], t, level, low = false) {
-    const o = { ...sustain, attack: 0.5, send: 0.75, bright: true };
-    // Ison: part of the choir holds the home note (F#) under every chord, as Byzantine choirs do.
-    play("choir_ahh", 54, t, { ...o, gain: 0.32 * level });
-    if (low) {
-      play("choir_ooh", fit(root, 42, 49), t, { ...o, gain: 0.6 * level });
-      play("choir_ahh", fit(root, 47, 55), t, { ...o, gain: 0.55 * level });
-      play("choir_ahh", fit(fifth, 47, 55), t, { ...o, gain: 0.45 * level });
-      play("choir_ahh", fit(third, 50, 58), t, { ...o, gain: 0.3 * level });
-    } else {
-      play("choir_ahh", fit(root, 50, 58), t, { ...o, gain: 0.5 * level });
-      play("choir_ahh", fit(fifth, 50, 58), t, { ...o, gain: 0.42 * level });
-      play("choir_ahh", fit(third, 52, 60), t, { ...o, gain: 0.34 * level });
+  // A low drone under each bar, and a soft string pad in the howl section.
+  function drone(t, root, len, gain) {
+    const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+    o.type = "triangle";
+    o.frequency.value = midiHz(root + 12);
+    f.type = "lowpass";
+    f.frequency.value = 300;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.8);
+    g.gain.setValueAtTime(gain, t + len - 0.3);
+    g.gain.linearRampToValueAtTime(0.0001, t + len + 0.4);
+    o.connect(f).connect(g).connect(out);
+    o.start(t);
+    o.stop(t + len + 0.5);
+  }
+  function pad(t, notes, len, gain) {
+    const g = ctx.createGain(), f = ctx.createBiquadFilter();
+    f.type = "lowpass";
+    f.frequency.value = 1100;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + 1.2);
+    g.gain.setValueAtTime(gain, t + len - 0.4);
+    g.gain.linearRampToValueAtTime(0.0001, t + len + 0.8);
+    f.connect(g);
+    g.connect(out);
+    g.connect(hall);
+    for (const n of notes) for (const det of [-7, 7]) {
+      const o = ctx.createOscillator();
+      o.type = "sawtooth";
+      o.frequency.value = midiHz(n);
+      o.detune.value = det;
+      o.connect(f);
+      o.start(t);
+      o.stop(t + len + 0.9);
     }
   }
-  // A melody note sung by the choir — "ahh" for most of the range, "ooh" for the lowest notes.
-  const sing = (note, t, steps, gain) =>
-    play(note >= 48 ? "choir_ahh" : "choir_ooh", note, t, { gain, dur: steps * STEP, attack: 0.12, release: 0.9, send: 0.7, bright: true });
-  // Soft high strings on the chord — the upper shimmer above the choir.
-  const highStrings = ([, third, fifth], t, gain) => {
-    play("violins_sus", fit(fifth, 66, 78), t, { ...sustain, attack: 0.4, send: 0.5, gain });
-    play("violins_sus", fit(third, 70, 81), t, { ...sustain, attack: 0.4, send: 0.5, gain: gain * 0.8 });
-  };
-
-  function lowStrings([root, , fifth], t, gain) {
-    play("bass_sus", 42, t, { ...sustain, attack: 0.3, send: 0.4, gain: 0.55 * gain }); // F# pedal under every chord
-    play("cello_sus", fit(root, 48, 59), t, { ...sustain, attack: 0.3, send: 0.4, gain: 0.4 * gain });
-    play("cello_sus", fit(fifth, 52, 63), t, { ...sustain, attack: 0.3, send: 0.4, gain: 0.3 * gain });
-  }
-  function lowBrass([root, , fifth], t, gain) {
-    const o = { dur: BAR - STEP, attack: 0.1, release: 0.5, send: 0.5 };
-    play("tuba", fit(root, 34, 46), t, { ...o, gain: 0.55 * gain });
-    play("trombone", fit(root, 42, 53), t, { ...o, gain: 0.36 * gain });
-    play("trombone", fit(fifth, 45, 56), t, { ...o, gain: 0.3 * gain });
-  }
-
-  // Driving percussion. `heavy` for the climax.
-  function drums(chord, s, t, heavy, k) {
-    if (s === 0) play("bassdrum", null, t, { gain: 0.95 * k, send: 0.5, variant: 0 });
-    if (s === 8) play("bassdrum", null, t, { gain: 0.7 * k, send: 0.5, variant: 1 });
-    if (heavy && (s === 6 || s === 14)) play("bassdrum", null, t, { gain: 0.45, send: 0.5, variant: 1 });
-    const pattern = { 0: 1, 3: 0.5, 6: 0.6, 8: 0.85, 10: 0.45, 11: 0.5, 12: 0.7, 14: 0.6, 15: 0.4 };
-    if (pattern[s]) timp(s === 8 || s === 12 ? chord[2] : chord[0], t, pattern[s] * k);
-    if (s % 2 === 0) {
-      play("cello_spic", fit(chord[OSTINATO[s / 2]], 45, 57), t, { gain: (s === 0 ? 0.5 : 0.36) * k, dur: STEP * 1.2, release: 0.1, send: 0.15 });
-    }
+  // Rattlesnake: a burst of noise chattering at ~45 Hz.
+  function rattle(t, dur, gain) {
+    const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(), am = ctx.createGain();
+    const lfo2 = ctx.createOscillator(), amDepth = ctx.createGain();
+    s.buffer = resources(ctx).noise;
+    s.loop = true;
+    f.type = "highpass";
+    f.frequency.value = 4500;
+    lfo2.type = "square";
+    lfo2.frequency.value = 45;
+    amDepth.gain.value = 0.5;
+    am.gain.value = 0.5;
+    lfo2.connect(amDepth).connect(am.gain);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(gain, t + 0.15);
+    g.gain.setValueAtTime(gain, t + dur - 0.3);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    s.connect(f).connect(am).connect(g).connect(out);
+    for (const x of [s, lfo2]) { x.start(t); x.stop(t + dur + 0.05); }
   }
 
   return {
-    ready,
+    ready: Promise.resolve(),
     stepDur: STEP,
-    loopSteps: TOTAL_BARS * 16,
-    level: 0.3,
+    loopSteps: TOTAL * 16,
+    level: 0.85,
     play(i, t) {
       const bar = Math.floor(i / 16), s = i % 16;
       const sec = sectionAt(bar);
-      // Phrases restart with each section, so every section enters on the home chord with
-      // its melody from the top; the final bar of the piece resolves home before the loop.
-      const phraseBar = sec.at % 8;
-      const finalBar = sec.name === "climax" && sec.at === sec.len - 1;
-      const chord = finalBar ? FSM : PROG[phraseBar];
-      const k = phraseBar * 16 + s; // position in the 8-bar phrase, for the melodies
-      const line = (notes) => notes.find(([at]) => at === k);
+      const ch = PROG[sec.at % 4];
+      const BAR = STEP * 16;
 
-      if (sec.name === "choir" || sec.name === "breath") {
-        // Deliberately well below the drop and climax — the contrast is what makes them land.
-        const level = sec.name === "choir" ? 0.6 : 0.42;
-        if (s === 0) {
-          choirChord(chord, t, level);
-          highStrings(chord, t, 0.32 * level);
-        }
-        const n = line(CHANT);
-        if (n) {
-          const o = { dur: n[2] * STEP, attack: 0.2, release: 0.8, send: 0.6 };
-          sing(n[1], t, n[2], 0.6 * level);
-          play("viola_sus", n[1] + 12, t, { ...o, gain: 0.16 * level });
-          play("violins_sus", n[1] + 24, t, { ...o, gain: 0.2 * level }); // the bright top of the line
-        }
-      } else if (sec.name === "drive") {
-        if (s === 0) {
-          if (sec.at === 0) play("gong", null, t, { gain: 0.5, send: 0.6 });
-          choirChord(chord, t, 0.35);
-          lowStrings(chord, t, 1.3);
-          highStrings(chord, t, 0.22);
-          if (sec.at % 2 === 0) lowBrass(chord, t, 1.15);
-          // horns answer with a swelling chord every other bar
-          if (sec.at % 2 === 1) for (const n of [chord[0], chord[2]]) play("horn", fit(n, 50, 60), t, { gain: 0.32, dur: BAR, attack: 0.6, release: 0.6, send: 0.5 });
-        }
-        drums(chord, s, t, false, 1.2);
-      } else if (sec.name === "climax") {
-        const last = sec.at === sec.len - 1;
-        if (s === 0) {
-          if (sec.at === 0) play("gong", null, t, { gain: 0.75, send: 0.6 });
-          // the brass keeps building through the final bars
-          const build = sec.at >= sec.len - 5 ? 1.7 : 1.35;
-          choirChord(chord, t, 1.1, true);
-          lowStrings(chord, t, 1.45);
-          lowBrass(chord, t, build);
-          highStrings(chord, t, 0.38);
-        }
-        const n = line(ANTHEM);
-        if (n && !last) {
-          const o = { dur: n[2] * STEP, attack: 0.1, release: 0.5, send: 0.5 };
-          play("horn", n[1], t, { ...o, gain: 0.55 });
-          sing(n[1], t, n[2], 0.5);
-          play("violins_sus", n[1] + 12, t, { ...o, gain: 0.42 });
-          play("violins_sus", n[1] + 24, t, { ...o, gain: 0.18 });
-        }
-        if (!last) drums(chord, s, t, true, 1.6);
-        else if (s === 0) {
-          // final hit, then silence before the choir returns
-          play("bassdrum", null, t, { gain: 1, send: 0.7 });
-          timp(chord[0], t, 1);
-          play("gong", null, t, { gain: 0.5, send: 0.7 });
-        }
+      if (s === 0) drone(t, ch.root, BAR, 0.16);
+      if (s === 0) tom(t, sec.name === "intro" ? 0.35 : 0.5);
+      if (s === 3) tom(t, sec.name === "intro" ? 0.2 : 0.3);
+      if (sec.name !== "intro" && s === 8) tom(t, 0.18);
+
+      if (sec.name === "howl") {
+        // Tremolo-picked chords, a pad underneath, and the coyote.
+        if (s % 2 === 0) for (const n of ch.tremolo) pluck(ctx, twangTone, t, n, "twang", { gain: s % 4 === 0 ? 0.13 : 0.09, dur: STEP * 1.8 });
+        if (s === 0) pad(t, ch.tremolo.map((n) => n - 12), BAR, 0.03);
+        if (sec.at === 0 && s === 2) coyote(ctx, [out, hall], t, { gain: 0.07 });
+        if (sec.at === 2 && s === 4) coyote(ctx, [out, hall], t, { gain: 0.05, yips: 4 });
+      } else if (s % 2 === 0) {
+        // Picked arpeggio, the bass note of each bar ringing out.
+        const n = ch.arp[s / 2];
+        pluck(ctx, twangTone, t, n, "twang", { gain: s === 0 ? 0.3 : 0.18, dur: s === 0 ? null : STEP * 3 });
       }
 
-      // Cymbal swells timed to peak on the drop and on the climax downbeat.
-      for (const target of [STARTS[1], STARTS[3]]) {
-        if (i === target * 16 - Math.round(CYMBAL_PEAK / STEP)) play("cymbal_cresc", null, t, { gain: 0.45, send: 0.6 });
+      if (sec.name === "tune") {
+        const k = sec.at * 16 + s;
+        const n = find(MELODY, k);
+        if (n) whistle(t, n[1], n[2] * STEP);
       }
-      // Timpani roll building through the bar before the climax.
-      if (bar === STARTS[3] - 1 && s === 0) {
-        play("timpani_roll", fit(chord[0], 31, 40), t, { gain: 0.15, swellTo: 0.8, dur: BAR - 0.1, attack: 0.05, release: 0.3, send: 0.5 });
-      }
+      if (sec.name === "intro" && sec.at === 1 && s === 8) rattle(t, 1.4, 0.035);
     },
   };
 }

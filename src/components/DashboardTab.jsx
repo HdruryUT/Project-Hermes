@@ -1,6 +1,6 @@
-import { DAY_NAMES, PHASE_COLOR, weeklyMiles, PLAN } from "../data/plan.js";
+import { DAY_NAMES, PHASE_COLOR, weeklyMiles, PLAN, RACE_RESULT } from "../data/plan.js";
 import { zoneForWorkout, zonePace, fmtPace, fmtDuration } from "../utils/paces.js";
-import { currentPosition, totalPlannedMiles, daysUntilRace } from "../utils/schedule.js";
+import { currentPosition, totalPlannedMiles, daysUntilRace, raceIsRun } from "../utils/schedule.js";
 import { weeklyActualMiles } from "../utils/log.js";
 import { useLocalStorage } from "../hooks/useLocalStorage.js";
 import { IconEating, IconGrocery, IconFlag, IconShirt } from "./icons.jsx";
@@ -38,15 +38,25 @@ export default function DashboardTab({ zones, goToTab }) {
   const isRest = today.type === "rest" || today.type === "xt";
   const isStrength = today.type === "strength";
 
+  const raceDone = raceIsRun();
+
   return (
     <div>
       {/* Stat strip */}
       <div className="dash-grid">
-        <div className="stat accent-orange">
-          <div className="lbl">Race day</div>
-          <div className="big">{days}</div>
-          <div className="lbl">days to go · Oct 10</div>
-        </div>
+        {raceDone ? (
+          <div className="stat accent-orange">
+            <div className="lbl">Race result</div>
+            <div className="big">{RACE_RESULT.place === 1 ? "1st" : RACE_RESULT.place || "✓"}</div>
+            <div className="lbl">{RACE_RESULT.race} · Oct 10</div>
+          </div>
+        ) : (
+          <div className="stat accent-orange">
+            <div className="lbl">Race day</div>
+            <div className="big">{days}</div>
+            <div className="lbl">days to go · Oct 10</div>
+          </div>
+        )}
         <div className="stat">
           <div className="lbl">Training week</div>
           <div className="big">{weekNo}<span className="of">/10</span></div>
@@ -72,7 +82,7 @@ export default function DashboardTab({ zones, goToTab }) {
           <span className="today-tag">
             {state === "before" ? "Kicking off" : state === "after" ? "You made it 🎉" : `Today · ${dayName}`}
           </span>
-          <span className="phase-pill" style={{ background: PHASE_COLOR[week.phase] || "var(--teal)" }}>
+          <span className="phase-pill" style={{ background: PHASE_COLOR[week.phase] || "var(--accent)" }}>
             {week.phase}
           </span>
         </div>
@@ -127,7 +137,7 @@ export default function DashboardTab({ zones, goToTab }) {
           {actualSeries && (
             <div className="chart-legend">
               <span><span className="dot" style={{ background: "var(--muted)" }} />Planned</span>
-              <span><span className="dot" style={{ background: "var(--blue)" }} />Actual</span>
+              <span><span className="dot" style={{ background: "var(--accent)" }} />Actual</span>
             </div>
           )}
         </div>

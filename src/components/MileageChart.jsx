@@ -99,7 +99,7 @@ export default function MileageChart({ plan, activeWeekIndex = null, actual = nu
         const r = Math.min(RADIUS, barH / 2, BAR_MAX / 2);
         const isActive = i === activeWeekIndex;
         const isHover = i === hover;
-        const fill = isActive ? "var(--blue)" : "var(--muted)";
+        const fill = isActive ? "var(--accent)" : "var(--muted)";
 
         return (
           <g key={w.week}>
@@ -144,25 +144,25 @@ export default function MileageChart({ plan, activeWeekIndex = null, actual = nu
         <>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" style={{ stopColor: "var(--blue)", stopOpacity: 0.35 }} />
-              <stop offset="100%" style={{ stopColor: "var(--blue)", stopOpacity: 0 }} />
+              <stop offset="0%" style={{ stopColor: "var(--accent)", stopOpacity: 0.35 }} />
+              <stop offset="100%" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
             </linearGradient>
           </defs>
           <path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-          <path d={smoothPath(actualPoints)} fill="none" stroke="var(--blue)" strokeWidth="2.5" strokeLinecap="round" />
+          <path d={smoothPath(actualPoints)} fill="none" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" />
           {actualPoints.map((p) => (
             <circle
               key={p.i} cx={p.x} cy={p.y}
               r={p === lastActual ? 5 : 3}
-              fill={p === lastActual ? "var(--blue)" : "var(--card)"}
-              stroke="var(--blue)" strokeWidth="2"
+              fill={p === lastActual ? "var(--accent)" : "var(--card)"}
+              stroke="var(--accent)" strokeWidth="2"
             />
           ))}
           {lastActual && (
             <text
               x={Math.min(lastActual.x + 8, VW - PAD.right - 2)} y={lastActual.y - 8}
               textAnchor={lastActual.x > VW - PAD.right - 40 ? "end" : "start"}
-              fontSize="11" fontWeight="700" fill="var(--blue)"
+              fontSize="11" fontWeight="700" fill="var(--accent)"
             >
               {lastActual.v} mi
             </text>

@@ -28,25 +28,34 @@ export async function fetchActivities(token, perPage = 200) {
   return res.json();
 }
 
+const isRun = (a) => a.type === "Run" || a.sport_type === "Run";
+const toRun = (a) => ({
+  id: a.id,
+  name: a.name,
+  date: a.start_date_local || a.start_date,
+  miles: a.distance / METERS_PER_MILE,
+  seconds: a.moving_time,
+});
+
 export function filterRecentRuns(activities, weeks = 6, minMiles = 3) {
   const cutoff = Date.now() - weeks * 7 * 24 * 3600 * 1000;
   return (activities || [])
-    .filter((a) => a.type === "Run" || a.sport_type === "Run")
+    .filter(isRun)
     .filter((a) => new Date(a.start_date).getTime() >= cutoff)
-    .map((a) => ({
-      id: a.id,
-      name: a.name,
-      date: a.start_date_local || a.start_date,
-      miles: a.distance / METERS_PER_MILE,
-      seconds: a.moving_time,
-    }))
+    .map(toRun)
     .filter((a) => a.miles >= minMiles && a.seconds > 0);
 }
 
 // All runs across the whole training block (for matching against the plan in the Log tab) —
-// no recency/distance cutoff, unlike filterRecentRuns which is tuned for picking a fitness effort.
-export function allRuns(activities, weeks = 20) {
-  return filterRecentRuns(activities, weeks, 0);
+// everything since the plan started, however long ago that is, unlike filterRecentRuns which is
+// tuned for picking a current-fitness effort.
+export function allRuns(activities) {
+  const from = blockStart() * 1000;
+  return (activities || [])
+    .filter(isRun)
+    .filter((a) => new Date(a.start_date).getTime() >= from)
+    .map(toRun)
+    .filter((a) => a.seconds > 0);
 }
 
 export function bestEffort(runs) {

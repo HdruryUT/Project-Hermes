@@ -1,8 +1,10 @@
-// The 3D "character select" arena behind the whole app: a neon grid floor, glowing pedestal,
-// receding light frames, and the player figure slowly turning on the pedestal.
+// The 3D desert behind the whole app: sand flats running out to layered mesas, saguaros, a
+// ranch fence and a campfire, with the player figure slowly turning on a sandstone rock ringed
+// by a lasso. Two times of day — golden hour and moonlit night — blend into each other: the sun
+// sinks behind the hills as the moon rises behind a howling coyote on the mesa.
 //
 // The figure is a 3D scan of you if one exists at MODEL_URL (drop a .glb in public/models/),
-// otherwise a procedurally built hologram stand-in.
+// otherwise a procedurally built hologram stand-in (in a cowboy hat).
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -11,60 +13,72 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { createCat } from "./cat.js";
-import hermesImg from "../assets/hermes-projection.png";
+import { buildCowboyHat } from "./hat.js";
+import { createTumbleweeds } from "./tumbleweed.js";
 
 export const MODEL_URL = "/models/me.glb";
 
-const NEON = new THREE.Color(0x38c8ff);
-const RED = new THREE.Color(0xff3b2f);
-// The accent colour per mode. Red is scaled up to cyan's luminance so it crosses the bloom
-// threshold and glows just as much (pure red is far darker to the eye than cyan).
-const luminance = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-const GOLD = new THREE.Color(0xf5c04a);
-const BG = 0x040812;
-// Per-mode palette. The dark "neutrals" (background/fog, floor, pedestal metal, sky light) shift
-// too — navy metal reflecting a cool sky reads as blue patches on an otherwise red stage.
-const c = (hex) => new THREE.Color(hex);
-const MODE_THEME = {
-  blue: { accent: NEON, bg: c(BG), floor: c(0x060c18), metal: c(0x0b1526), sky: c(0xbfe6ff), ground: c(0x08101e) },
-  red: {
-    accent: RED.clone().multiplyScalar(luminance(NEON) / luminance(RED)),
-    bg: c(0x0a0405), floor: c(0x0e0606), metal: c(0x1a0c0c), sky: c(0xffd2c8), ground: c(0x1a0808),
-  },
-};
-const modeMix = (m) => (m === "red" ? 1 : 0);
 const FIGURE_HEIGHT = 1.8; // scans are rescaled to this height (meters) whatever units they export in
 const PEDESTAL_TOP = 0.16;
 const LOOK_AT = new THREE.Vector3(0, 1.05, 0);
 
-// Neon materials push their colour above 1.0 so only they cross the bloom threshold —
-// the lit figure stays crisp while the lines glow. Materials in the accent colour are tagged
-// with their boost so a mode switch can recolour them (see applyAccent).
-function tagAccent(mat, color, boost) {
-  if (color === NEON) mat.userData.accentBoost = boost;
-  return mat;
-}
-function neon(color, boost = 3, opts = {}) {
-  const m = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(boost), toneMapped: false, ...opts });
-  return tagAccent(m, color, boost);
-}
-function neonLine(color, boost = 2.5, opacity = 1) {
-  const m = new THREE.LineBasicMaterial({
-    color: color.clone().multiplyScalar(boost), toneMapped: false, transparent: opacity < 1, opacity,
-  });
-  return tagAccent(m, color, boost);
+// Per-mode palette. Every scenery material is tagged with one of these keys (userData.tone) and
+// recoloured as the mode blends day (0) ↔ night (1); numbers are light levels.
+const c = (hex) => new THREE.Color(hex);
+const THEME = {
+  day: {
+    zenith: c(0x5d719e), skyMid: c(0xdb9c7a), horizon: c(0xf2b57a), glow: c(0xffa24a),
+    ground: c(0xb98252), ridgeNear: c(0x7c4027), ridgeMid: c(0x9b5735), ridgeFar: c(0xbc7c57),
+    cactus: c(0x5e7a45), rock: c(0xa95b37), scrub: c(0x7d7b45), straw: c(0xb48c58), wood: c(0x6e4b30), stone: c(0x8b6b56),
+    sandstone: c(0xb36a40), sandstoneTop: c(0xcb8659), hemiSky: c(0xffd8ac), hemiGround: c(0x7a4a2a),
+    key: c(0xffb070), fill: c(0xffe4c8), dust: c(0xffd9a0),
+    // The hologram: cream thread by day (the sky behind it is orange), turquoise by night.
+    holo: c(0xf0e1c4),
+    hemiI: 0.75, keyI: 1.9, fillI: 0.7, fireI: 1.2, exposure: 0.95,
+  },
+  night: {
+    zenith: c(0x06071a), skyMid: c(0x161a3c), horizon: c(0x2e2f55), glow: c(0x8a9ad0),
+    ground: c(0x34304a), ridgeNear: c(0x121019), ridgeMid: c(0x1b1a2b), ridgeFar: c(0x29293f),
+    cactus: c(0x23302f), rock: c(0x41323a), scrub: c(0x272c27), straw: c(0x4a4048), wood: c(0x2c2327), stone: c(0x3e3842),
+    sandstone: c(0x4c3b44), sandstoneTop: c(0x5e4a52), hemiSky: c(0x5b6b9c), hemiGround: c(0x121020),
+    key: c(0xa8b8ff), fill: c(0x7080b8), dust: c(0xa8b8e0),
+    holo: c(0x4fc1b0),
+    hemiI: 0.6, keyI: 1.0, fillI: 0.35, fireI: 9, exposure: 1.05,
+  },
+};
+const modeMix = (m) => (m === "night" ? 1 : 0);
+
+// Where the sun and moon sit, as directions from the camera — framed beside the figure.
+const SUN_DIR = new THREE.Vector3(0.13, 0.05, -1).normalize();
+const MOON_DIR = new THREE.Vector3(-0.118, 0.158, -1).normalize();
+const SKY_R = 80;
+
+// Seeded random, so the scenery is laid out the same on every visit.
+function rng(seed) {
+  return () => {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-function radialTexture(inner, outer) {
-  const c = document.createElement("canvas");
-  c.width = c.height = 128;
-  const g = c.getContext("2d");
-  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grd.addColorStop(0, inner);
-  grd.addColorStop(1, outer);
+function toned(mat, tone) {
+  mat.userData.tone = tone;
+  return mat;
+}
+const standard = (tone, opts = {}) => toned(new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0, ...opts }), tone);
+
+function radialTexture(stops) {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 256;
+  const g = cv.getContext("2d");
+  const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  for (const [at, col] of stops) grd.addColorStop(at, col);
   g.fillStyle = grd;
-  g.fillRect(0, 0, 128, 128);
-  const t = new THREE.CanvasTexture(c);
+  g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
   return t;
 }
@@ -80,243 +94,527 @@ function disposeObject(root) {
   });
 }
 
-// ---- Environment ----------------------------------------------------------
+// ---- Sky ------------------------------------------------------------------
 
-function buildArena(scene) {
-  const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(80, 80),
-    Object.assign(new THREE.MeshStandardMaterial({ color: 0x060c18, roughness: 0.38, metalness: 0.7 }), { userData: { neutral: "floor" } })
-  );
-  floor.rotation.x = -Math.PI / 2;
-  scene.add(floor);
-
-  const grid = new THREE.GridHelper(80, 80);
-  grid.material = neonLine(NEON, 0.9, 0.22);
-  grid.position.y = 0.002;
-  scene.add(grid);
-
-  // A colonnade of temple fronts receding down the hall: marble columns carrying a neon
-  // architrave and pediment.
-  const TEMPLES = [-3.5, -7, -10.5, -14];
-  const W = 2.2, H = 5.4, R = 1.2, O = 0.4;
-  const seg = [
-    [-W, 0], [-W, H], [W, 0], [W, H],
-    [-W - O, H], [W + O, H], [-W - O, H + 0.12], [W + O, H + 0.12],
-    [-W - O, H + 0.12], [0, H + 0.12 + R], [0, H + 0.12 + R], [W + O, H + 0.12],
-  ].map(([x, y]) => new THREE.Vector3(x, y, 0));
-  const frameGeo = new THREE.BufferGeometry().setFromPoints(seg);
-  TEMPLES.forEach((z, i) => {
-    const frame = new THREE.LineSegments(frameGeo, neonLine(i % 2 ? GOLD : NEON, 2.6 - i * 0.4));
-    frame.position.z = z;
-    scene.add(frame);
+function buildSky(scene) {
+  const material = new THREE.ShaderMaterial({
+    uniforms: {
+      uZenith: { value: new THREE.Color() }, uMid: { value: new THREE.Color() },
+      uHorizon: { value: new THREE.Color() }, uGlow: { value: new THREE.Color() },
+      uSunDir: { value: SUN_DIR.clone() },
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vDir;
+      void main() {
+        vec4 wp = modelMatrix * vec4(position, 1.0);
+        vDir = normalize(wp.xyz - cameraPosition);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uZenith, uMid, uHorizon, uGlow, uSunDir;
+      varying vec3 vDir;
+      void main() {
+        vec3 d = normalize(vDir);
+        float h = d.y;
+        vec3 col = mix(uHorizon, uMid, smoothstep(0.0, 0.14, h));
+        col = mix(col, uZenith, smoothstep(0.1, 0.7, h));
+        float s = max(dot(d, uSunDir), 0.0);
+        col += uGlow * (pow(s, 16.0) * 0.32 + pow(s, 120.0) * 0.5) * (1.0 - smoothstep(0.0, 0.5, h) * 0.5);
+        gl_FragColor = vec4(h < 0.0 ? uHorizon : col, 1.0);
+      }`,
+    side: THREE.BackSide, depthWrite: false, fog: false,
   });
-  const runway = new THREE.BufferGeometry().setFromPoints([
-    new THREE.Vector3(-W, 0.004, 3), new THREE.Vector3(-W, 0.004, -14),
-    new THREE.Vector3(W, 0.004, 3), new THREE.Vector3(W, 0.004, -14),
-  ]);
-  scene.add(new THREE.LineSegments(runway, neonLine(NEON, 1.6)));
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(95, 48, 24), material);
+  sky.renderOrder = -2;
+  scene.add(sky);
 
-  const column = buildColumn();
-  for (const side of [-1, 1]) {
-    for (const z of TEMPLES) {
-      const c = column.clone();
-      c.position.set(side * W, 0, z);
-      scene.add(c);
-    }
+  // Stars: a dome of points that fades in at night, a few brighter than the rest.
+  const r = rng(7), N = 700, pos = new Float32Array(N * 3), size = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const az = r() * Math.PI * 2, el = Math.asin(0.02 + r() * 0.98);
+    pos.set([Math.cos(el) * Math.cos(az) * 90, Math.sin(el) * 90, Math.cos(el) * Math.sin(az) * 90], i * 3);
+    size[i] = r() < 0.08 ? 2.6 : 1 + r();
   }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("size", new THREE.BufferAttribute(size, 1));
+  const starMat = new THREE.ShaderMaterial({
+    uniforms: { uOpacity: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: /* glsl */ `
+      attribute float size; varying float vTw; uniform float uTime;
+      void main() {
+        vTw = 0.75 + 0.25 * sin(uTime * 2.0 + position.x * 13.0 + position.z * 7.0);
+        gl_PointSize = size * 1.6;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform float uOpacity; varying float vTw;
+      void main() {
+        float d = length(gl_PointCoord - 0.5);
+        float a = smoothstep(0.5, 0.0, d) * uOpacity * vTw;
+        gl_FragColor = vec4(vec3(1.0, 0.97, 0.9) * 1.4 * a, a);
+      }`,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const stars = new THREE.Points(geo, starMat);
+  stars.renderOrder = -1;
+  scene.add(stars);
+
+  // Sun: a hot disc with a wide soft halo. Moon: a cream disc with faint maria, and a halo.
+  const disc = (tex, size) => {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshBasicMaterial({
+      map: tex, transparent: true, depthWrite: false, fog: false, toneMapped: false,
+    }));
+    m.renderOrder = -1;
+    scene.add(m);
+    return m;
+  };
+  const sun = disc(radialTexture([[0, "#fff6dc"], [0.36, "#ffd27a"], [0.4, "rgba(255,170,80,0.4)"], [0.6, "rgba(255,140,60,0.08)"], [1, "rgba(255,120,40,0)"]]), 14);
+  sun.material.color.setScalar(1.5);
+  sun.material.blending = THREE.AdditiveBlending;
+
+  const moonCanvas = document.createElement("canvas");
+  moonCanvas.width = moonCanvas.height = 256;
+  const g = moonCanvas.getContext("2d");
+  const halo = g.createRadialGradient(128, 128, 30, 128, 128, 128);
+  halo.addColorStop(0, "rgba(220,225,255,0.35)");
+  halo.addColorStop(1, "rgba(220,225,255,0)");
+  g.fillStyle = halo;
+  g.fillRect(0, 0, 256, 256);
+  g.fillStyle = "#f4ecd8";
+  g.beginPath();
+  g.arc(128, 128, 34, 0, Math.PI * 2);
+  g.fill();
+  g.fillStyle = "rgba(170,160,150,0.35)";
+  for (const [x, y, rad] of [[116, 118, 9], [140, 112, 6], [134, 140, 10], [112, 142, 5], [148, 130, 4]]) {
+    g.beginPath();
+    g.arc(x, y, rad, 0, Math.PI * 2);
+    g.fill();
+  }
+  const moonTex = new THREE.CanvasTexture(moonCanvas);
+  moonTex.colorSpace = THREE.SRGBColorSpace;
+  const moon = disc(moonTex, 17);
+  moon.material.color.setScalar(1.15);
+
+  return { sky, material, stars, starMat, sun, moon };
 }
 
-// A Doric column ~5.4 m tall: plinth, fluted shaft, echinus and abacus.
-function buildColumn() {
-  const g = new THREE.Group();
-  const marble = new THREE.MeshStandardMaterial({ color: 0x6f6c66, roughness: 0.55, metalness: 0.1 });
+// ---- Land -----------------------------------------------------------------
 
-  const shaft = new THREE.CylinderGeometry(0.3, 0.36, 4.8, 48, 1);
-  const p = shaft.attributes.position;
+function sandTexture() {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 256;
+  const g = cv.getContext("2d");
+  g.fillStyle = "#e8e8e8";
+  g.fillRect(0, 0, 256, 256);
+  const r = rng(3);
+  for (let i = 0; i < 5000; i++) {
+    const v = 200 + Math.floor(r() * 55);
+    g.fillStyle = `rgb(${v},${v},${v})`;
+    g.fillRect(r() * 256, r() * 256, 1 + r() * 1.5, 1 + r() * 1.5);
+  }
+  // wind ripples
+  g.strokeStyle = "rgba(255,255,255,0.18)";
+  for (let y = 0; y < 256; y += 9) {
+    g.beginPath();
+    for (let x = 0; x <= 256; x += 8) g.lineTo(x, y + Math.sin(x * 0.05 + y) * 2);
+    g.stroke();
+  }
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(50, 50);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+function buildGround(scene) {
+  const geo = new THREE.PlaneGeometry(220, 220, 180, 180);
+  geo.rotateX(-Math.PI / 2);
+  const p = geo.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
-    const a = Math.atan2(z, x);
-    const k = 1 - 0.06 * Math.max(0, Math.cos(a * 20)); // 20 flutes
+    const r = Math.hypot(x, z);
+    // Flat where things walk; gentle dunes further out.
+    const k = THREE.MathUtils.smoothstep(r, 12, 30);
+    p.setY(i, k * (Math.sin(x * 0.09 + 1.3) * Math.cos(z * 0.07) * 0.9 + Math.sin(x * 0.031 - z * 0.05) * 1.1 + 0.6));
+  }
+  geo.computeVertexNormals();
+  const ground = new THREE.Mesh(geo, standard("ground", { map: sandTexture(), roughness: 1 }));
+  scene.add(ground);
+}
+
+// One silhouette layer of the far landscape: rolling hills with flat-topped mesas — a cliff
+// standing on a sloping talus skirt — at depth z, coloured by its tone and hazed by the fog.
+function ridgeLayer({ z, tone, seed, base, mesas }) {
+  const r = rng(seed);
+  const ph = [r() * 10, r() * 10, r() * 10];
+  const hill = (x) => base[0] + (base[1] - base[0]) * (0.5 + 0.3 * Math.sin(x * 0.07 + ph[0]) + 0.2 * Math.sin(x * 0.19 + ph[1]));
+  const mesaAt = (x) => {
+    let h = 0;
+    for (const m of mesas) {
+      const cliff = m.h * Math.min(1, Math.max(0, (x - m.x0) / 0.6)) * Math.min(1, Math.max(0, (m.x1 - x) / 0.6));
+      const skirtW = (m.x1 - m.x0) * 0.3 + 2;
+      const skirt = m.h * 0.42 * Math.min(1, Math.max(0, (x - m.x0 + skirtW) / skirtW)) * Math.min(1, Math.max(0, (m.x1 + skirtW - x) / skirtW));
+      const top = cliff >= m.h * 0.999 ? Math.sin(x * 3.1 + ph[2]) * 0.06 : 0;
+      h = Math.max(h, cliff + top, skirt);
+    }
+    return h;
+  };
+  const shape = new THREE.Shape();
+  const X0 = -110, X1 = 110;
+  shape.moveTo(X0, -3);
+  for (let x = X0; x <= X1; x += 0.2) shape.lineTo(x, Math.max(hill(x), mesaAt(x)));
+  shape.lineTo(X1, -3);
+  const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape), toned(new THREE.MeshBasicMaterial(), tone));
+  mesh.position.z = z;
+  return { mesh, heightAt: (x) => Math.max(hill(x), mesaAt(x)) };
+}
+
+// A sitting coyote howling at the sky, side on — drawn into a canvas for the mesa-top silhouette.
+// Traced in a 100 × 100 box, facing left: sitting tall, head thrown back with the snout to
+// the sky and the jaw open, ears laid back, a ruff down the neck, the front leg braced, the
+// hind paw flat on the rock, and a bushy tail curling up behind.
+const HOWL_PATH =
+  "M33.3 0.0 L34.7 1.4 L35.7 5.8 L37.1 9.6 L39.5 11.5 L41.9 16.3 L43.4 19.7 L45.3 22.1 L46.7 24.5 " +
+  "L49.1 27.4 L51.1 29.8 L52.0 32.1 L50.6 33.6 L48.2 34.0 L44.8 33.4 L46.7 37.4 L49.6 41.3 " +
+  "L53.0 44.1 L55.4 45.1 L56.3 46.3 L57.8 47.2 L59.7 48.8 L61.1 49.9 L62.3 51.6 L64.0 54.2 " +
+  "L68.8 59.0 L74.6 66.7 L77.0 72.0 L78.4 78.7 L79.8 83.5 L79.4 88.3 L81.8 81.6 L82.2 73.9 " +
+  "L80.8 67.2 L79.4 60.9 L81.3 60.5 L85.1 62.9 L88.0 65.3 L89.4 63.3 L90.4 69.1 L90.9 72.0 " +
+  "L91.8 71.0 L91.4 76.8 L93.3 76.8 L92.8 83.5 L89.9 89.3 L85.1 94.0 L78.9 96.0 L77.9 98.1 " +
+  "L75.5 99.3 L72.6 99.8 L46.7 100.0 L43.9 98.8 L44.0 96.7 L44.8 94.5 L47.7 93.1 L55.4 93.6 " +
+  "L53.5 90.2 L50.6 86.9 L48.2 83.5 L46.5 79.7 L44.8 78.9 L41.9 77.7 L39.1 76.0 L35.2 74.4 " +
+  "L32.3 72.9 L29.9 74.9 L27.5 79.7 L25.1 85.4 L23.2 89.4 L20.8 92.1 L19.4 95.0 L17.0 97.1 " +
+  "L14.1 98.4 L10.3 99.0 L6.6 98.7 L6.9 96.7 L10.3 95.6 L12.7 93.1 L15.1 87.3 L17.5 80.6 L19.9 73.9 " +
+  "L22.0 68.6 L21.8 64.3 L21.0 58.5 L20.8 52.8 L20.4 47.0 L20.2 41.3 L20.8 34.5 L22.0 28.8 " +
+  "L23.2 22.1 L24.1 16.8 L23.7 12.0 L22.6 8.6 L22.4 6.7 L23.5 5.8 L25.6 6.5 L26.8 6.7 L26.1 7.7 " +
+  "L27.5 8.6 L28.7 5.3 L30.4 1.9 Z";
+
+function buildCoyoteSilhouette() {
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 256;
+  const g = cv.getContext("2d");
+  g.scale(2.5, 2.5);
+  g.fillStyle = "#fff";
+  g.fill(new Path2D(HOWL_PATH));
+  const tex = new THREE.CanvasTexture(cv);
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), toned(new THREE.MeshBasicMaterial({ map: tex, alphaTest: 0.5 }), "ridgeMid"));
+  return mesh;
+}
+
+function buildLandscape(scene) {
+  const near = ridgeLayer({ z: -24, tone: "ridgeNear", seed: 11, base: [0.2, 1.4], mesas: [{ x0: 8, x1: 12.5, h: 3.4 }, { x0: -31, x1: -22, h: 2.8 }] });
+  const mid = ridgeLayer({
+    z: -40, tone: "ridgeMid", seed: 23, base: [0.4, 2.2],
+    mesas: [{ x0: -10.5, x1: -2.8, h: 7.6 }, { x0: 17, x1: 31, h: 5.2 }, { x0: -42, x1: -27, h: 6.2 }],
+  });
+  const far = ridgeLayer({
+    z: -62, tone: "ridgeFar", seed: 37, base: [1, 3.2],
+    mesas: [{ x0: -26, x1: -13, h: 9.5 }, { x0: -5.5, x1: -2, h: 11 }, { x0: 22, x1: 46, h: 7.5 }, { x0: -62, x1: -40, h: 8.5 }],
+  });
+  for (const l of [near, mid, far]) scene.add(l.mesh);
+
+  // The coyote sits on the big mid mesa, framed by the moon.
+  const coyote = buildCoyoteSilhouette();
+  const cx = -6.2, s = 2.5;
+  coyote.scale.setScalar(s / 2);
+  coyote.position.set(cx, mid.heightAt(cx) + s / 2 - 0.12, -39.9);
+  scene.add(coyote);
+}
+
+// Saguaro: a ribbed trunk with a domed top and a few upturned arms.
+function ribbed(radius, length) {
+  const geo = new THREE.CylinderGeometry(radius, radius * 1.04, length, 36, 1, true);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i), z = p.getZ(i);
+    const k = 1 - 0.09 * (0.5 + 0.5 * Math.cos(Math.atan2(z, x) * 12));
     p.setX(i, x * k);
     p.setZ(i, z * k);
   }
-  shaft.computeVertexNormals();
-  const s = new THREE.Mesh(shaft, marble);
-  s.position.y = 0.2 + 2.4;
-  g.add(s);
+  geo.computeVertexNormals();
+  return geo;
+}
 
-  const plinth = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.2, 0.95), marble);
-  plinth.position.y = 0.1;
-  g.add(plinth);
-  const echinus = new THREE.Mesh(new THREE.CylinderGeometry(0.46, 0.3, 0.22, 48), marble);
-  echinus.position.y = 5.0 + 0.11;
-  g.add(echinus);
-  const abacus = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.18, 1.0), marble);
-  abacus.position.y = 5.22 + 0.09;
-  g.add(abacus);
-
-  for (const [y, r, color] of [[0.24, 0.37, NEON], [4.96, 0.31, GOLD]]) {
-    const band = new THREE.Mesh(new THREE.TorusGeometry(r, 0.01, 6, 64), neon(color, 2.6));
-    band.rotation.x = Math.PI / 2;
-    band.position.y = y;
-    g.add(band);
+function buildSaguaro(r, height, material) {
+  const g = new THREE.Group();
+  const tr = height * 0.06;
+  const trunk = new THREE.Mesh(ribbed(tr, height - tr), material);
+  trunk.position.y = (height - tr) / 2;
+  g.add(trunk);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(tr * 0.95, 24, 10, 0, Math.PI * 2, 0, Math.PI / 2), material);
+  cap.position.y = height - tr;
+  g.add(cap);
+  const arms = 1 + Math.floor(r() * 3);
+  for (let i = 0; i < arms; i++) {
+    const arm = new THREE.Group();
+    const ar = tr * (0.62 + r() * 0.15);
+    const y = height * (0.32 + r() * 0.3);
+    const out = tr + height * (0.09 + r() * 0.07);
+    const up = height * (0.16 + r() * 0.2);
+    const across = new THREE.Mesh(new THREE.CylinderGeometry(ar, ar, out, 16), material);
+    across.rotation.z = Math.PI / 2;
+    across.position.set(out / 2, y, 0);
+    const elbow = new THREE.Mesh(new THREE.SphereGeometry(ar, 16, 12), material);
+    elbow.position.set(out, y, 0);
+    const rise = new THREE.Mesh(ribbed(ar, up), material);
+    rise.position.set(out, y + up / 2, 0);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(ar * 0.97, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), material);
+    tip.position.set(out, y + up, 0);
+    arm.add(across, elbow, rise, tip);
+    arm.rotation.y = (i / arms) * Math.PI * 2 + r() * 1.2;
+    g.add(arm);
   }
   return g;
 }
 
-// Greek key (meander) around a circle on the floor plane, as line segments.
-// Each unit is a hook rising off an inner base ring: up, across, down, back, up.
-function meanderRing(rBase, depth, units) {
-  const hook = [[1, 0], [1, 4], [5, 4], [5, 1], [3, 1], [3, 2]]; // (u along, v outward), 6 u per unit
-  const pts = [];
-  const at = (unit, u, v) => {
-    const a = ((unit * 6 + u) / (units * 6)) * Math.PI * 2;
-    const r = rBase + (v / 4) * depth;
-    return new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r);
+function buildRock(r, size, material) {
+  const geo = new THREE.DodecahedronGeometry(size, 1);
+  const p = geo.attributes.position;
+  // The geometry is non-indexed (each face has its own copy of a corner), so the bump must
+  // depend on where the corner is, not on the loop — otherwise faces tear apart into shards.
+  const seed = r() * 100;
+  const bump = (x, y, z) => {
+    const h = Math.sin((x * 12.9898 + y * 78.233 + z * 37.719) / size + seed) * 43758.5453;
+    return h - Math.floor(h);
   };
-  for (let n = 0; n < units; n++) {
-    for (let i = 0; i < hook.length - 1; i++) {
-      const [u0, v0] = hook[i], [u1, v1] = hook[i + 1];
-      const steps = Math.max(1, Math.abs(u1 - u0)); // subdivide arcs so they follow the curve
-      for (let s = 0; s < steps; s++) {
-        pts.push(at(n, u0 + ((u1 - u0) * s) / steps, v0 + ((v1 - v0) * s) / steps));
-        pts.push(at(n, u0 + ((u1 - u0) * (s + 1)) / steps, v0 + ((v1 - v0) * (s + 1)) / steps));
-      }
-    }
+  for (let i = 0; i < p.count; i++) {
+    const k = 0.8 + bump(p.getX(i), p.getY(i), p.getZ(i)) * 0.35;
+    p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.65, p.getZ(i) * k);
   }
-  return new THREE.BufferGeometry().setFromPoints(pts);
+  geo.computeVertexNormals();
+  return new THREE.Mesh(geo, material);
 }
 
+function buildScrub(r, material) {
+  const g = new THREE.Group();
+  const n = 3 + Math.floor(r() * 4);
+  for (let i = 0; i < n; i++) {
+    const s = 0.1 + r() * 0.18;
+    const b = new THREE.Mesh(new THREE.IcosahedronGeometry(s, 0), material);
+    b.position.set((r() - 0.5) * 0.45, s * 0.7, (r() - 0.5) * 0.45);
+    b.rotation.set(r() * 3, r() * 3, r() * 3);
+    g.add(b);
+  }
+  return g;
+}
+
+function buildProps(scene) {
+  const r = rng(101);
+  const cactus = standard("cactus", { roughness: 0.75 });
+  for (const [x, z, h] of [[-4.6, -6.5, 3.4], [5.4, -9.5, 4.6], [-9.5, -15, 5.2], [12, -19, 4.8], [-17, -21, 4.4], [8.6, -23, 3.9], [-26, -12, 5.5], [21, -12, 4.2]]) {
+    const s = buildSaguaro(r, h, cactus);
+    s.position.set(x, 0, z);
+    s.rotation.y = r() * Math.PI * 2;
+    scene.add(s);
+  }
+
+  const rock = standard("rock", { flatShading: true });
+  for (const [x, z, s] of [[-6.5, -3.5, 0.9], [-7.6, -4.6, 0.55], [7, -4, 1.1], [8.2, -3.2, 0.5], [-3.6, -10, 0.7], [9.5, -13, 1.6], [-13, -9, 1.3], [2.2, 3.4, 0.16], [-3.4, 2.6, 0.22], [3.8, -1.2, 0.18], [-2.2, -6.2, 0.2]]) {
+    const m = buildRock(r, s, rock);
+    m.position.set(x, s * 0.25, z);
+    m.rotation.y = r() * 6;
+    scene.add(m);
+  }
+
+  const scrub = standard("scrub", { flatShading: true });
+  for (let i = 0; i < 26; i++) {
+    const a = r() * Math.PI * 2, d = 3.6 + r() * 16;
+    const x = Math.cos(a) * d, z = Math.sin(a) * d - 3;
+    if (z > 1 || (x > 1 && x < 5.2 && z > -1.6)) continue; // keep the foreground and the lasso's tail clear
+    const b = buildScrub(r, scrub);
+    b.position.set(x, 0, z);
+    scene.add(b);
+  }
+
+  // A ranch fence running away to the left: weathered posts and two strands of wire.
+  const wood = standard("wood");
+  const postGeo = new THREE.BoxGeometry(0.09, 1.05, 0.09);
+  const wire = [[], []];
+  for (let i = 0; i < 14; i++) {
+    const u = i / 13;
+    const x = -6.2 - u * 9, z = -2.4 - u * 30;
+    const post = new THREE.Mesh(postGeo, wood);
+    post.position.set(x, 0.5, z);
+    post.rotation.set((r() - 0.5) * 0.08, r(), (r() - 0.5) * 0.1);
+    scene.add(post);
+    wire[0].push(new THREE.Vector3(x, 0.5, z));
+    wire[1].push(new THREE.Vector3(x, 0.88, z));
+  }
+  const wireMat = toned(new THREE.LineBasicMaterial({ transparent: true, opacity: 0.6 }), "wood");
+  for (const pts of wire) scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), wireMat));
+}
+
+// The figure's rock: a sandstone slab with an irregular edge, on a darker stratum.
 function buildPedestal(scene) {
   const g = new THREE.Group();
-  const metal = new THREE.MeshStandardMaterial({ color: 0x0b1526, roughness: 0.35, metalness: 0.85 });
-  metal.userData.neutral = "metal";
-
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.2, PEDESTAL_TOP, 72), metal);
-  base.position.y = PEDESTAL_TOP / 2;
-  g.add(base);
-
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.1, 0.012, 8, 160), neon(NEON, 3.2));
-  rim.rotation.x = Math.PI / 2;
-  rim.position.y = PEDESTAL_TOP + 0.002;
-  g.add(rim);
-
-  const inner = new THREE.Mesh(new THREE.TorusGeometry(0.8, 0.006, 6, 128), neon(GOLD, 2.4));
-  inner.rotation.x = Math.PI / 2;
-  inner.position.y = PEDESTAL_TOP + 0.004;
-  g.add(inner);
-
-  const key = new THREE.LineSegments(meanderRing(0.8, 0.16, 30), neonLine(GOLD, 2.2));
-  key.position.y = PEDESTAL_TOP + 0.005;
-  g.add(key);
-
-  const floorRing = new THREE.Mesh(new THREE.TorusGeometry(1.45, 0.008, 6, 160), neon(NEON, 2));
-  floorRing.rotation.x = Math.PI / 2;
-  floorRing.position.y = 0.006;
-  g.add(floorRing);
-
-  // Segmented outer ring that counter-rotates — the "loading" ring of a character select.
-  const dashes = new THREE.Group();
-  const dashMat = neon(NEON, 1.6, { transparent: true, opacity: 0.85, side: THREE.DoubleSide });
-  const SEG = 28;
-  for (let i = 0; i < SEG; i++) {
-    const len = (Math.PI * 2) / SEG;
-    const dash = new THREE.Mesh(new THREE.RingGeometry(1.62, 1.68, 6, 1, i * len, len * 0.55), dashMat);
-    dash.rotation.x = -Math.PI / 2;
-    dashes.add(dash);
-  }
-  dashes.position.y = 0.007;
-  g.add(dashes);
-
-  const glow = new THREE.Mesh(
-    new THREE.CircleGeometry(2.6, 64),
-    tagAccent(new THREE.MeshBasicMaterial({
-      map: radialTexture("rgba(255,255,255,0.55)", "rgba(255,255,255,0)"), color: NEON.clone(),
-      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-    }), NEON, 1)
-  );
-  glow.rotation.x = -Math.PI / 2;
-  glow.position.y = 0.004;
-  g.add(glow);
+  const slab = (rTop, rBot, h, y, tone, seed) => {
+    const geo = new THREE.CylinderGeometry(rTop, rBot, h, 22, 1);
+    const p = geo.attributes.position;
+    const rr = rng(seed), wob = Array.from({ length: 23 }, () => 0.9 + rr() * 0.16);
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i), z = p.getZ(i);
+      if (Math.hypot(x, z) < 1e-3) continue;
+      const seg = Math.round(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 22) % 22;
+      p.setX(i, x * wob[seg]);
+      p.setZ(i, z * wob[seg]);
+    }
+    geo.computeVertexNormals();
+    const m = new THREE.Mesh(geo, standard(tone, { flatShading: true }));
+    m.position.y = y;
+    g.add(m);
+  };
+  slab(1.12, 1.3, 0.12, 0.02, "sandstone", 5);
+  slab(1.02, 1.1, 0.1, PEDESTAL_TOP - 0.05, "sandstoneTop", 9);
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(0.5, 48),
-    new THREE.MeshBasicMaterial({ map: radialTexture("rgba(0,0,0,0.7)", "rgba(0,0,0,0)"), transparent: true, depthWrite: false })
+    new THREE.MeshBasicMaterial({ map: radialTexture([[0, "rgba(0,0,0,0.6)"], [1, "rgba(0,0,0,0)"]]), transparent: true, depthWrite: false })
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = PEDESTAL_TOP + 0.006;
+  shadow.position.y = PEDESTAL_TOP + 0.003;
   g.add(shadow);
-
   scene.add(g);
-  return { dashes };
 }
 
-function buildParticles(scene) {
-  const COUNT = 260;
-  const pos = new Float32Array(COUNT * 3);
-  for (let i = 0; i < COUNT; i++) {
-    pos[i * 3] = (Math.random() - 0.5) * 12;
-    pos[i * 3 + 1] = Math.random() * 5;
-    pos[i * 3 + 2] = -10 + Math.random() * 13;
+// The cap's orange rope, as a lasso lying on the sand around the rock, its tail trailing off.
+function ropeTexture() {
+  const cv = document.createElement("canvas");
+  cv.width = 64;
+  cv.height = 16;
+  const g = cv.getContext("2d");
+  g.fillStyle = "#e8913a";
+  g.fillRect(0, 0, 64, 16);
+  g.strokeStyle = "#a95a1c";
+  g.lineWidth = 3;
+  for (let x = -16; x < 80; x += 8) {
+    g.beginPath();
+    g.moveTo(x, 16);
+    g.lineTo(x + 10, 0);
+    g.stroke();
   }
-  // Mostly accent-coloured motes with every third one gold (recoloured in applyAccent).
-  const col = new Float32Array(COUNT * 3);
-  for (let i = 0; i < COUNT; i++) {
-    const c = (i % 3 ? NEON : GOLD).clone().multiplyScalar(2);
-    col.set([c.r, c.g, c.b], i * 3);
+  const t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function buildLasso(scene) {
+  const tex = ropeTexture();
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+  const R = 1.48, y = 0.024;
+  const loop = [];
+  for (let i = 0; i < 40; i++) {
+    const a = (i / 40) * Math.PI * 2;
+    const rr = R + Math.sin(a * 3 + 0.5) * 0.05 + Math.sin(a * 7) * 0.02;
+    loop.push(new THREE.Vector3(Math.cos(a) * rr, y, Math.sin(a) * rr));
   }
+  const loopCurve = new THREE.CatmullRomCurve3(loop, true);
+  const loopTex = tex.clone();
+  loopTex.repeat.set(140, 1);
+  const loopMesh = new THREE.Mesh(new THREE.TubeGeometry(loopCurve, 240, 0.022, 8, true), mat.clone());
+  loopMesh.material.map = loopTex;
+  scene.add(loopMesh);
+
+  // Honda knot where the tail leaves the loop, then the tail snaking off to the right.
+  const a0 = 0.35, hx = Math.cos(a0) * (R + 0.06), hz = Math.sin(a0) * (R + 0.06);
+  const honda = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.016, 8, 20), mat);
+  honda.position.set(hx, y + 0.01, hz);
+  honda.rotation.x = -Math.PI / 2;
+  scene.add(honda);
+  const tail = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(hx, y, hz), new THREE.Vector3(hx + 0.6, y, hz + 0.15),
+    new THREE.Vector3(hx + 1.0, y, hz - 0.35), new THREE.Vector3(hx + 1.7, y, hz - 0.1), new THREE.Vector3(hx + 2.4, y, hz - 0.6),
+  ]);
+  const tailTex = tex.clone();
+  tailTex.repeat.set(60, 1);
+  const tailMesh = new THREE.Mesh(new THREE.TubeGeometry(tail, 80, 0.022, 8, false), mat.clone());
+  tailMesh.material.map = tailTex;
+  scene.add(tailMesh);
+}
+
+// Campfire behind the figure: ring of stones, crossed logs, flickering flames, rising embers and
+// a warm light that carries the scene at night.
+function buildCampfire(scene) {
+  const g = new THREE.Group();
+  g.position.set(1.5, 0, -4.4);
+  const r = rng(55);
+  const stone = standard("stone", { flatShading: true });
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2;
+    const s = buildRock(r, 0.07 + r() * 0.03, stone);
+    s.position.set(Math.cos(a) * 0.33, 0.03, Math.sin(a) * 0.33);
+    g.add(s);
+  }
+  const wood = standard("wood");
+  for (let i = 0; i < 4; i++) {
+    const log = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.5, 8), wood);
+    const a = (i / 4) * Math.PI * 2 + 0.4;
+    log.position.set(Math.cos(a) * 0.1, 0.12, Math.sin(a) * 0.1);
+    log.rotation.set(0, -a, 0);
+    log.rotateZ(0.95);
+    g.add(log);
+  }
+  const flames = [];
+  for (const [rad, h, col, k] of [[0.16, 0.5, 0xff6a1a, 2.4], [0.11, 0.42, 0xffa030, 3], [0.06, 0.3, 0xffe08a, 3.4]]) {
+    const f = new THREE.Mesh(new THREE.ConeGeometry(rad, h, 12, 1, true), new THREE.MeshBasicMaterial({
+      color: new THREE.Color(col).multiplyScalar(k), transparent: true, opacity: 0.85,
+      depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    }));
+    f.geometry.translate(0, h / 2, 0);
+    f.position.y = 0.06;
+    g.add(f);
+    flames.push(f);
+  }
+  const light = new THREE.PointLight(0xff8a3a, 1, 11, 1.6);
+  light.position.y = 0.5;
+  g.add(light);
+
+  const N = 40, pos = new Float32Array(N * 3), life = new Float32Array(N);
+  for (let i = 0; i < N; i++) life[i] = r();
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  const embers = new THREE.Points(geo, new THREE.PointsMaterial({
+    color: new THREE.Color(0xff8a30).multiplyScalar(3), size: 0.035, transparent: true, opacity: 0.9,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+  }));
+  g.add(embers);
+  scene.add(g);
+
+  const drift = Array.from({ length: N }, () => [(r() - 0.5) * 0.3, (r() - 0.5) * 0.3, 0.5 + r() * 0.6]);
+  return {
+    light,
+    update(t, dt, level, reduceMotion) {
+      const flick = 0.85 + 0.1 * Math.sin(t * 13) + 0.08 * Math.sin(t * 29 + 1.3);
+      light.intensity = level * (reduceMotion ? 1 : flick);
+      flames.forEach((f, i) => {
+        f.scale.y = reduceMotion ? 1 : 1 + 0.18 * Math.sin(t * (11 + i * 3) + i) + 0.08 * Math.sin(t * 23 + i * 2);
+        f.rotation.y = t * (0.6 + i * 0.3);
+      });
+      if (reduceMotion) return;
+      for (let i = 0; i < N; i++) {
+        life[i] += dt * 0.55;
+        if (life[i] > 1) life[i] -= 1;
+        const l = life[i], d = drift[i];
+        pos.set([d[0] * l + Math.sin(t * 2 + i) * 0.04 * l, 0.2 + l * d[2] * 2.2, d[1] * l], i * 3);
+      }
+      geo.attributes.position.needsUpdate = true;
+    },
+  };
+}
+
+// Dust drifting on the breeze (warm motes by day, cool specks at night).
+function buildDust(scene) {
+  const COUNT = 220, r = rng(77);
+  const pos = new Float32Array(COUNT * 3);
+  for (let i = 0; i < COUNT; i++) pos.set([(r() - 0.5) * 16, r() * 4, -9 + r() * 12], i * 3);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
   const points = new THREE.Points(geo, new THREE.PointsMaterial({
-    vertexColors: true, size: 0.03, transparent: true, opacity: 0.7,
-    depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
+    size: 0.022, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending,
   }));
   scene.add(points);
   return points;
-}
-
-// Hermes, watching over the arena: the logo projected as a colossal, faint hologram at the far
-// end of the hall. Drawn in the mode's accent with his gold details glowing, scanlines and a
-// gentle flicker; turns to face the camera and drifts slowly.
-function buildHermesWatcher(scene) {
-  const tex = new THREE.TextureLoader().load(hermesImg);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.ShaderMaterial({
-    uniforms: {
-      uMap: { value: tex }, uColor: { value: NEON.clone() }, uGold: { value: GOLD.clone().multiplyScalar(1.6) },
-      uTime: { value: 0 }, uOpacity: { value: 0.32 }, uGlitch: { value: 0 },
-    },
-    vertexShader: /* glsl */ `
-      varying vec2 vUv;
-      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: /* glsl */ `
-      uniform sampler2D uMap; uniform vec3 uColor; uniform vec3 uGold;
-      uniform float uTime; uniform float uOpacity; uniform float uGlitch;
-      varying vec2 vUv;
-      void main() {
-        vec2 uv = vUv;
-        uv.x += uGlitch * 0.03 * step(0.6, fract(sin(floor(uv.y * 18.0) * 91.7 + uTime) * 437.5)); // stutters with the figure
-        vec4 tex = texture2D(uMap, uv);
-        if (tex.a < 0.03) discard;
-        float lum = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
-        // gold parts of the art (helmet wings, caduceus, sandals) stay gold; the rest takes the accent
-        float goldness = clamp((tex.r - tex.b) * 2.2, 0.0, 1.0) * smoothstep(0.35, 0.7, lum);
-        vec3 col = mix(uColor * (0.35 + lum * 1.3), uGold * (0.5 + lum), goldness);
-        float lines = 0.65 + 0.35 * step(0.5, fract(vUv.y * 170.0 - uTime * 0.7));
-        float flicker = 0.88 + 0.12 * sin(uTime * 11.0) * sin(uTime * 4.3);
-        float fade = smoothstep(0.0, 0.3, vUv.y); // dissolves into the floor haze
-        float a = tex.a * lines * flicker * fade * uOpacity;
-        gl_FragColor = vec4(col * a, a);
-      }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false,
-  });
-  const aspect = 1234 / 1274; // source image
-  const H = 6.4;
-  const plane = new THREE.Mesh(new THREE.PlaneGeometry(H * aspect, H), material);
-  plane.position.set(0.3, 3.7, -15.5);
-  scene.add(plane);
-  return { plane, material };
 }
 
 // ---- Hologram stand-in figure --------------------------------------------
@@ -328,7 +626,7 @@ function buildHermesWatcher(scene) {
 function hologramMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
-      uColor: { value: NEON.clone() }, uTime: { value: 0 },
+      uColor: { value: new THREE.Color() }, uTime: { value: 0 },
       uGlitch: { value: 0 }, uGlitchSeed: { value: 0 },
       uBody: { value: new THREE.Vector3() }, uFigureInv: { value: new THREE.Matrix4() },
     },
@@ -378,7 +676,7 @@ function hologramMaterial() {
         float amberPulse = 0.65 + 0.35 * sin(uTime * 3.2);
         col = mix(col, vec3(2.6, 0.95, 0.08), clamp(achilles * 1.5, 0.0, 1.0)); // achilles: amber
 
-        float a = (0.1 + rim * 0.9) * lines + sweep * 0.5;
+        float a = (0.16 + rim * 0.84) * lines + sweep * 0.5;
         a += achilles * 0.55 * amberPulse + legs * 0.12 + core * 0.15;
 
         // Glitch: whole bands drop out and the colour skews for a moment.
@@ -386,13 +684,14 @@ function hologramMaterial() {
         col = mix(col, col.bgr * 1.3, 0.5 * uGlitch * step(0.5, hash(floor(vY * 9.0) + uGlitchSeed)));
         a *= 1.0 - drop;
 
-        gl_FragColor = vec4(col * (0.5 + rim * 2.2 + sweep * 2.0), a);
+        gl_FragColor = vec4(col * (0.6 + rim * 2.0 + sweep * 2.0), clamp(a, 0.0, 1.0));
       }`,
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    // Normal (not additive) blending, so the figure still reads against a bright sunset sky.
+    transparent: true, depthWrite: false,
   });
 }
 
-// A simple standing runner built from capsules, feet at y = 0, ~1.8 m tall.
+// A simple standing runner built from capsules, feet at y = 0, ~1.8 m tall — in a cowboy hat.
 function buildHologram(material) {
   const g = new THREE.Group();
   const part = (geo, [x, y, z], { scale, rot } = {}) => {
@@ -416,61 +715,52 @@ function buildHologram(material) {
     part(cap(0.056, 0.34), [s * 0.1, 0.3, 0]);
     part(cap(0.045, 0.13), [s * 0.1, 0.05, 0.05], { rot: [Math.PI / 2, 0, 0] });
   }
-  g.add(buildLaurel());
-  return g;
-}
-
-// Gold laurel wreath: two sprays of leaves meeting at the back of the head, open at the brow.
-function buildLaurel() {
-  const g = new THREE.Group();
-  const leafGeo = new THREE.SphereGeometry(1, 10, 6);
-  const leafMat = neon(GOLD, 1.5);
-  const LEAVES = 11;
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < LEAVES; i++) {
-      const a = Math.PI / 2 + side * (0.55 + (i / (LEAVES - 1)) * 2.45); // from the temples round to the back
-      const leaf = new THREE.Mesh(leafGeo, leafMat);
-      leaf.scale.set(0.009, 0.005, 0.026);
-      leaf.position.set(Math.cos(a) * 0.092, 1.735 + (i % 2 ? 0.008 : -0.004), Math.sin(a) * 0.092);
-      leaf.rotation.set(side * 0.5, -a + side * 0.55, 0);
-      g.add(leaf);
-    }
-  }
+  const hat = buildCowboyHat({ brimR: 0.21, crownR: 0.092, crownH: 0.13, felt: material, band: material });
+  hat.position.set(0, 1.735, 0);
+  hat.rotation.x = -0.08; // tipped back a touch
+  g.add(hat);
   return g;
 }
 
 // ---- Public API -----------------------------------------------------------
 
-export function createArena(canvas, { onModel, mode = "blue" } = {}) {
+// Opening shot: the camera starts high over the desert, looking out at the mesas, and sweeps
+// down to the rock.
+const INTRO = { seconds: 4.6, from: new THREE.Vector3(-4, 7.5, 34), lookFrom: new THREE.Vector3(0, 4, -40) };
+const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2);
+
+export function createArena(canvas, { onModel, mode = "day", mix: startMix = null, intro = false } = {}) {
   const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.setClearColor(BG);
+  renderer.toneMapping = THREE.NeutralToneMapping; // keeps the sunset hues (ACES greys them)
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(BG);
-  scene.fog = new THREE.FogExp2(BG, 0.075);
+  scene.background = new THREE.Color();
+  scene.fog = new THREE.Fog(0x000000, 22, 170);
   const pmrem = new THREE.PMREMGenerator(renderer);
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-  scene.environmentIntensity = 0.35;
+  scene.environmentIntensity = 0.25;
 
-  const hemi = new THREE.HemisphereLight(0xbfe6ff, 0x08101e, 0.7);
+  const hemi = new THREE.HemisphereLight(0xffffff, 0x000000, 1);
   scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xffffff, 2.0);
-  key.position.set(2.5, 4, 4);
+  // Key from behind-right (toward the sun / moon side) rims everything; fill from the front.
+  const key = new THREE.DirectionalLight(0xffffff, 1);
+  key.position.set(5, 4, -6);
   scene.add(key);
-  const rimCool = new THREE.PointLight(NEON, 16);
-  rimCool.position.set(-2, 2.2, -1.5);
-  scene.add(rimCool);
-  const rimWarm = new THREE.PointLight(GOLD, 10);
-  rimWarm.position.set(2, 1.4, -1.5);
-  scene.add(rimWarm);
+  const fill = new THREE.DirectionalLight(0xffffff, 1);
+  fill.position.set(-3, 4, 6);
+  scene.add(fill);
 
-  buildArena(scene);
-  const { dashes } = buildPedestal(scene);
-  const particles = buildParticles(scene);
-  const hermes = buildHermesWatcher(scene);
+  const sky = buildSky(scene);
+  buildGround(scene);
+  buildLandscape(scene);
+  buildProps(scene);
+  buildPedestal(scene);
+  buildLasso(scene);
+  const fire = buildCampfire(scene);
+  const dust = buildDust(scene);
+  const tumbleweeds = createTumbleweeds(scene, standard("straw", { roughness: 1 }), { reduceMotion, intro });
 
   const turntable = new THREE.Group();
   turntable.position.y = PEDESTAL_TOP;
@@ -491,54 +781,72 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
 
   const scanRing = new THREE.Mesh(
     new THREE.TorusGeometry(0.46, 0.004, 6, 96),
-    neon(NEON, 3, { transparent: true, opacity: 0 })
+    new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
   );
   scanRing.rotation.x = Math.PI / 2;
   scene.add(scanRing);
 
-  // ---- colour mode: accent-tagged materials and the dark neutrals blend blue (0) ↔ red (1)
-  let mix = modeMix(mode), mixTarget = mix;
-  const accent = new THREE.Color(), tmp = new THREE.Color();
-  const blend = (key) => tmp.copy(MODE_THEME.blue[key]).lerp(MODE_THEME.red[key], mix);
-  const particleColors = particles.geometry.attributes.color;
-  function applyAccent() {
-    accent.copy(blend("accent"));
+  // ---- time of day: every toned material and light blends day (0) ↔ night (1)
+  let mix = startMix ?? modeMix(mode), mixTarget = mix;
+  const tmp = new THREE.Color();
+  const blend = (k) => tmp.copy(THEME.day[k]).lerp(THEME.night[k], mix);
+  const num = (k) => THREE.MathUtils.lerp(THEME.day[k], THEME.night[k], mix);
+  const sunAt = new THREE.Vector3(), moonAt = new THREE.Vector3(), glowDir = new THREE.Vector3();
+  function applyMode() {
     scene.traverse((o) => {
       const mats = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
-      for (const m of mats) {
-        const boost = m.userData.accentBoost;
-        if (boost != null) m.color.copy(accent).multiplyScalar(boost);
-        if (m.userData.neutral) m.color.copy(blend(m.userData.neutral));
-      }
+      for (const m of mats) if (m.userData.tone) m.color.copy(blend(m.userData.tone));
     });
-    scene.background.copy(blend("bg"));
-    scene.fog.color.copy(blend("bg"));
-    renderer.setClearColor(blend("bg"));
-    hemi.color.copy(blend("sky"));
-    hemi.groundColor.copy(blend("ground"));
-    holoMat.uniforms.uColor.value.copy(accent);
-    hermes.material.uniforms.uColor.value.copy(accent);
-    rimCool.color.copy(accent);
-    for (let i = 0; i < particleColors.count; i++) {
-      if (i % 3) particleColors.setXYZ(i, accent.r * 2, accent.g * 2, accent.b * 2);
-    }
-    particleColors.needsUpdate = true;
+    const u = sky.material.uniforms;
+    u.uZenith.value.copy(blend("zenith"));
+    u.uMid.value.copy(blend("skyMid"));
+    u.uHorizon.value.copy(blend("horizon"));
+    u.uGlow.value.copy(blend("glow"));
+    scene.background.copy(blend("horizon"));
+    scene.fog.color.copy(blend("horizon"));
+    hemi.color.copy(blend("hemiSky"));
+    hemi.groundColor.copy(blend("hemiGround"));
+    hemi.intensity = num("hemiI");
+    key.color.copy(blend("key"));
+    key.intensity = num("keyI");
+    fill.color.copy(blend("fill"));
+    fill.intensity = num("fillI");
+    renderer.toneMappingExposure = num("exposure");
+    sky.starMat.uniforms.uOpacity.value = THREE.MathUtils.smoothstep(mix, 0.4, 1);
+    dust.material.color.copy(blend("dust"));
+    holoMat.uniforms.uColor.value.copy(blend("holo")).multiplyScalar(1.15);
+    scanRing.material.color.copy(blend("holo")).multiplyScalar(2.5);
+    // The sun sinks behind the hills as the moon rises, and the sky's glow follows whichever is up.
+    sunAt.copy(SUN_DIR).multiplyScalar(SKY_R).add(new THREE.Vector3(0, 1.4 - mix * 14, 6.4));
+    moonAt.copy(MOON_DIR).multiplyScalar(SKY_R).add(new THREE.Vector3(0, 1.4 - (1 - mix) * 16, 6.4));
+    sky.sun.position.copy(sunAt);
+    sky.moon.position.copy(moonAt);
+    sky.sun.material.opacity = 1 - mix * 0.5;
+    sky.moon.material.opacity = 0.3 + mix * 0.7;
+    glowDir.copy(SUN_DIR).lerp(MOON_DIR, mix).normalize();
+    u.uSunDir.value.copy(glowDir);
   }
-  applyAccent();
+  applyMode();
+  // Day (0) ↔ night (1), or anything between for dusk when following the real sun.
+  function setMix(v) {
+    mixTarget = Math.max(0, Math.min(1, v));
+  }
   function setMode(m) {
     mixTarget = modeMix(m);
   }
 
   const cat = createCat(scene, { reduceMotion });
 
-  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 200);
   camera.position.set(0, 1.4, 6.4);
   camera.lookAt(LOOK_AT);
+  let introT = intro && !reduceMotion ? 0 : null;
+  const look = new THREE.Vector3(), home = new THREE.Vector3();
 
   const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
   const composer = new EffectComposer(renderer, target);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.85, 0.55, 1.0);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.6, 1.0);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -644,7 +952,7 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
 
   // ---- render loop (paused while the tab is hidden)
   let raf = 0, last = performance.now(), t = 0;
-  const pos = particles.geometry.attributes.position;
+  const dustPos = dust.geometry.attributes.position;
 
   function frame(now) {
     raf = requestAnimationFrame(frame);
@@ -658,14 +966,14 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
       spinVel += (baseSpin - spinVel) * Math.min(1, dt * 1.5);
       turntable.rotation.y += spinVel * dt;
     }
-    dashes.rotation.y -= dt * (reduceMotion ? 0.02 : 0.15);
     holoMat.uniforms.uTime.value = t;
+    sky.starMat.uniforms.uTime.value = t;
 
     // Glitch every few seconds, for a fraction of a second.
     glitchTimer -= dt;
     if (glitchTimer <= 0 && !reduceMotion) {
       glitchLeft = 0.12 + Math.random() * 0.25;
-      glitchTimer = 4 + Math.random() * 6;
+      glitchTimer = 5 + Math.random() * 8;
     }
     if (glitchLeft > 0) {
       glitchLeft -= dt;
@@ -675,34 +983,36 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
       holoMat.uniforms.uGlitch.value = 0;
     }
 
-    // Hermes in the background: faces the camera, drifts gently, glitches with the figure.
-    hermes.material.uniforms.uTime.value = t;
-    hermes.material.uniforms.uGlitch.value = holoMat.uniforms.uGlitch.value;
-    hermes.plane.position.y = 3.7 + (reduceMotion ? 0 : Math.sin(t * 0.35) * 0.12);
-    hermes.plane.lookAt(camera.position.x, hermes.plane.position.y, camera.position.z);
-
     // Body map lives in figure space, which turns with the turntable.
     holoMat.uniforms.uFigureInv.value.copy(turntable.matrixWorld).invert();
     holoMat.uniforms.uBody.value.lerp(bodyTarget, Math.min(1, dt * 2));
     cat.update(dt, camera);
     if (mix !== mixTarget) {
-      mix += (mixTarget - mix) * Math.min(1, dt * 3);
-      if (Math.abs(mixTarget - mix) < 0.005) mix = mixTarget;
-      applyAccent();
+      mix += (mixTarget - mix) * Math.min(1, dt * 1.6);
+      if (Math.abs(mixTarget - mix) < 0.003) mix = mixTarget;
+      applyMode();
     }
+    fire.update(t, dt, num("fireI"), reduceMotion);
+    tumbleweeds.update(dt, t);
 
     const cycle = (t % 5) / 5;
     scanRing.position.y = PEDESTAL_TOP + 0.05 + cycle * 1.85;
-    scanRing.material.opacity = Math.sin(cycle * Math.PI) * 0.8;
+    scanRing.material.opacity = Math.sin(cycle * Math.PI) * 0.7;
 
     if (!reduceMotion) {
-      for (let i = 0; i < pos.count; i++) {
-        let y = pos.getY(i) + dt * 0.12;
-        if (y > 5) y = 0;
-        pos.setY(i, y);
+      // Dust rides the breeze left to right, bobbing a little.
+      for (let i = 0; i < dustPos.count; i++) {
+        let x = dustPos.getX(i) + dt * 0.25;
+        if (x > 8) x = -8;
+        dustPos.setX(i, x);
+        dustPos.setY(i, dustPos.getY(i) + Math.sin(t + i) * dt * 0.05);
       }
-      pos.needsUpdate = true;
+      dustPos.needsUpdate = true;
     }
+
+    // Sun and moon always face the camera.
+    sky.sun.lookAt(camera.position);
+    sky.moon.lookAt(camera.position);
 
     // Ease the framing toward its target so tab/layout changes glide rather than jump.
     const k = firstFrame ? 1 : Math.min(1, dt * 4);
@@ -712,9 +1022,19 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
     focus.zoom += (focusTarget.zoom - focus.zoom) * k;
     camera.setViewOffset(W, H, -focus.x, -focus.y, W, H);
     camera.zoom = focus.zoom;
-    camera.position.x += (mouse.x * 0.25 - camera.position.x) * Math.min(1, dt * 2);
-    camera.position.y += (1.4 - mouse.y * 0.08 - camera.position.y) * Math.min(1, dt * 2);
-    camera.lookAt(LOOK_AT);
+    home.set(camera.position.x + (mouse.x * 0.25 - camera.position.x) * Math.min(1, dt * 2), 0, 6.4);
+    home.y = camera.position.y + (1.4 - mouse.y * 0.08 - camera.position.y) * Math.min(1, dt * 2);
+    if (introT != null) {
+      introT += dt;
+      const u = easeInOut(Math.min(1, introT / INTRO.seconds));
+      home.set(0, 1.4, 6.4);
+      camera.position.lerpVectors(INTRO.from, home, u);
+      camera.lookAt(look.lerpVectors(INTRO.lookFrom, LOOK_AT, u));
+      if (introT >= INTRO.seconds) introT = null;
+    } else {
+      camera.position.copy(home);
+      camera.lookAt(LOOK_AT);
+    }
     camera.updateProjectionMatrix();
 
     composer.render(dt);
@@ -733,6 +1053,8 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
   return {
     setFocus,
     setMode,
+    setMix,
+    skipIntro: () => { introT = null; },
     // Training body map levels, 0–1 each: { achilles, legs, core }.
     setBodyMap: ({ achilles = 0, legs = 0, core = 0 } = {}) => bodyTarget.set(achilles, legs, core),
     toggleCatDance: () => cat.toggleDance(),
@@ -745,8 +1067,8 @@ export function createArena(canvas, { onModel, mode = "blue" } = {}) {
       canvas.removeEventListener("pointerdown", onDown);
       document.removeEventListener("visibilitychange", onVisibility);
       cat.dispose();
+      tumbleweeds.dispose();
       disposeObject(scene);
-      hermes.material.uniforms.uMap.value.dispose(); // shader-uniform textures aren't found by disposeObject
       scene.environment?.dispose();
       pmrem.dispose();
       target.dispose();
