@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useMemo, lazy, Suspense } from "react";
 import { computeZones } from "./utils/paces.js";
-import { daysUntilRace, currentPosition, totalPlannedMiles, raceIsRun } from "./utils/schedule.js";
+import { daysUntilRace, currentPosition, raceIsRun } from "./utils/schedule.js";
 import { sunElevation, nightness, DEFAULT_PLACE } from "./utils/sun.js";
 import { RACE_RESULT } from "./data/plan.js";
 import { useLocalStorage } from "./hooks/useLocalStorage.js";
 import { useStravaAutoSync } from "./hooks/useStravaAutoSync.js";
 import { bodyStatus } from "./utils/bodyStatus.js";
-import { weeklyActualMiles } from "./utils/log.js";
 import { setSoundEnabled, setTrack, unlockAudio, playHover, playSelect } from "./game/audio.js";
 import CoyoteLogo from "./components/CoyoteLogo.jsx";
 import DashboardTab from "./components/DashboardTab.jsx";
@@ -139,7 +138,6 @@ export default function App() {
       window.removeEventListener("keydown", skip);
     };
   }, [intro]);
-  const [hasScan, setHasScan] = useState(false);
   const [danceSignal, setDanceSignal] = useState(0); // secret: tap the player name
   useStravaAutoSync();
   const [activities] = useLocalStorage("orca.activities", null);
@@ -159,10 +157,6 @@ export default function App() {
   const raceRun = raceIsRun();
   const pos = currentPosition();
   const level = pos.state === "before" ? 0 : pos.week.week;
-  const xpTotal = totalPlannedMiles();
-  const xpMiles = pos.state === "before"
-    ? 0
-    : Math.min(xpTotal, Math.round(weeklyActualMiles(activities).reduce((s, m) => s + m, 0) * 10) / 10);
   const active = TABS.find((t) => t.id === tab);
   const activeIndex = TABS.indexOf(active);
 
@@ -232,7 +226,7 @@ export default function App() {
   return (
     <div className={`game ${intro ? "intro" : ""}`}>
       <Suspense fallback={null}>
-        <Arena stageRef={stageRef} onModel={setHasScan} mix={sceneMix} intro={intro} danceSignal={danceSignal} bodyMap={body.levels} />
+        <Arena stageRef={stageRef} mix={sceneMix} intro={intro} danceSignal={danceSignal} bodyMap={body.levels} />
       </Suspense>
       <div className="fx-vignette" aria-hidden="true" />
       <div className="fx-grain" aria-hidden="true" />
@@ -307,16 +301,11 @@ export default function App() {
             <div className="player-level">
               WEEK {level} <span>· {pos.week.phase}</span>
             </div>
-            <div className="xp-bar"><span style={{ width: `${Math.round((xpMiles / xpTotal) * 100)}%` }} /></div>
-            <div className="xp-meta">Plan XP · {xpMiles} / {xpTotal} mi</div>
             {body.notes.length > 0 && (
               <div className="body-notes">
                 {body.notes.map((n) => <span key={n.text} className={`body-note ${n.tone}`}>{n.text}</span>)}
               </div>
             )}
-            <div className="stage-hint">
-              ⟲ Drag to rotate{!hasScan && " · hologram stand-in until your 3D scan is added"}
-            </div>
           </div>
         </div>
 

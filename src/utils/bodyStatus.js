@@ -34,7 +34,6 @@ export function bodyStatus(activities, now = new Date()) {
     },
     notes: [
       watch && { tone: "amber", text: watch.note },
-      recentMiles >= 1 && { tone: "accent", text: `Legs: ${Math.round(recentMiles)} mi in 3 days` },
       strengthDay && { tone: "gold", text: "Core: strength day" },
     ].filter(Boolean),
   };
