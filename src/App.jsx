@@ -150,6 +150,7 @@ export default function App() {
   const body = useMemo(() => bodyStatus(activities), [activities, clockTick]);
   const stageRef = useRef(null);
   const panelRef = useRef(null);
+  const navRef = useRef(null);
   const menuRefs = useRef([]);
 
   const zones = computeZones(effort);
@@ -205,8 +206,14 @@ export default function App() {
       const top = panel.getBoundingClientRect().top + window.scrollY - sticky;
       if (window.scrollY > top) window.scrollTo({ top });
     }
-    // Keep the active item visible in the phone's swipeable menu strip.
-    menuRefs.current[TABS.findIndex((t) => t.id === tab)]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    // Keep the active item visible in the phone's swipeable menu strip. For the first tab,
+    // force scrollLeft to 0 rather than scrollIntoView — "nearest" can leave a few stray
+    // pixels of scroll on an already-visible item, which then reads as an offset Dashboard.
+    if (tab === TABS[0].id && navRef.current) {
+      navRef.current.scrollLeft = 0;
+    } else {
+      menuRefs.current[TABS.findIndex((t) => t.id === tab)]?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
   }, [tab]);
 
   function select(id) {
@@ -277,7 +284,7 @@ export default function App() {
       </header>
 
       <div className={`game-body ${tab === "dashboard" ? "" : "no-stage"}`}>
-        <nav className="game-menu" onKeyDown={onMenuKey} aria-label="Sections">
+        <nav className="game-menu" ref={navRef} onKeyDown={onMenuKey} aria-label="Sections">
           <div className="menu-heading">Pick your trail</div>
           {TABS.map((t, i) => (
             <button

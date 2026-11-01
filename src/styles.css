@@ -212,6 +212,7 @@ body {
   .game-body { display: flex; flex-direction: column; }
   .game-menu {
     flex-direction: row; padding: 10px 16px; gap: 4px; overflow-x: auto; scrollbar-width: none;
+    overscroll-behavior-x: contain; /* no elastic pull-past-the-edge bounce at either end */
     position: sticky; top: calc(var(--hud-h) + 4px); z-index: 3; background: rgba(var(--bg-rgb), 0.88); border-bottom: 1px solid var(--line);
   }
   .game-menu::-webkit-scrollbar { display: none; }
