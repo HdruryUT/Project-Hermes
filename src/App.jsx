@@ -225,9 +225,11 @@ export default function App() {
 
   return (
     <div className={`game ${intro ? "intro" : ""}`}>
-      <Suspense fallback={null}>
-        <Arena stageRef={stageRef} mix={sceneMix} intro={intro} danceSignal={danceSignal} bodyMap={body.levels} />
-      </Suspense>
+      {tab === "dashboard" && (
+        <Suspense fallback={null}>
+          <Arena stageRef={stageRef} mix={sceneMix} intro={intro} danceSignal={danceSignal} bodyMap={body.levels} />
+        </Suspense>
+      )}
       <div className="fx-vignette" aria-hidden="true" />
       <div className="fx-grain" aria-hidden="true" />
       {intro && (
@@ -274,7 +276,7 @@ export default function App() {
         </div>
       </header>
 
-      <div className="game-body">
+      <div className={`game-body ${tab === "dashboard" ? "" : "no-stage"}`}>
         <nav className="game-menu" onKeyDown={onMenuKey} aria-label="Sections">
           <div className="menu-heading">Pick your trail</div>
           {TABS.map((t, i) => (
@@ -293,21 +295,23 @@ export default function App() {
           <div className="menu-hint">↑ ↓ to navigate</div>
         </nav>
 
-        <div className="stage" ref={stageRef}>
-          <div className="player-plate">
-            {/* Secret: tapping the name toggles the cat's dance. */}
-            <div className="player-name" onClick={() => setDanceSignal((n) => n + 1)}>Drury</div>
-            <div className="player-tag">Coyote of Orem</div>
-            <div className="player-level">
-              WEEK {level} <span>· {pos.week.phase}</span>
-            </div>
-            {body.notes.length > 0 && (
-              <div className="body-notes">
-                {body.notes.map((n) => <span key={n.text} className={`body-note ${n.tone}`}>{n.text}</span>)}
+        {tab === "dashboard" && (
+          <div className="stage" ref={stageRef}>
+            <div className="player-plate">
+              {/* Secret: tapping the name toggles the cat's dance. */}
+              <div className="player-name" onClick={() => setDanceSignal((n) => n + 1)}>Drury</div>
+              <div className="player-tag">Coyote of Orem</div>
+              <div className="player-level">
+                WEEK {level} <span>· {pos.week.phase}</span>
               </div>
-            )}
+              {body.notes.length > 0 && (
+                <div className="body-notes">
+                  {body.notes.map((n) => <span key={n.text} className={`body-note ${n.tone}`}>{n.text}</span>)}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         <main className="panel" ref={panelRef}>
           <div className="panel-head">

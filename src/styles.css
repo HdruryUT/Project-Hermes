@@ -135,6 +135,8 @@ body {
   grid-template-columns: var(--menu-w) minmax(0, 1fr) var(--panel-w);
   pointer-events: none; /* the empty stage lets drags fall through to the 3D canvas */
 }
+/* No hologram outside the Dashboard tab — the panel takes the freed middle column. */
+.game-body.no-stage { grid-template-columns: var(--menu-w) minmax(0, 1fr); pointer-events: auto; }
 .game-menu, .panel { pointer-events: auto; }
 
 /* Menu */
