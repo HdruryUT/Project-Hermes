@@ -7,6 +7,7 @@ export default function CoyoteLogo({ size = 44 }) {
     <img
       src={coyoteImg}
       alt="El Coyote logo"
+      className="brand-logo"
       style={{ height: size, width: "auto", display: "block" }}
     />
   );

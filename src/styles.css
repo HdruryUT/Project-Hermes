@@ -99,7 +99,7 @@ body {
   font-family: var(--font-ui);
 }
 .brand { display: flex; align-items: center; gap: 12px; margin-right: auto; }
-.brand svg { flex-shrink: 0; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
+.brand-logo { flex-shrink: 0; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
 .hud-top h1 { margin: 0; font-family: var(--font-western); font-size: 25px; font-weight: 400; letter-spacing: 1.5px; text-transform: uppercase; color: #e8913a; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.45); line-height: 1; }
 .tagline { margin-top: 3px; font-family: var(--font-classic); font-size: 11.5px; font-weight: 600; letter-spacing: 2.5px; text-transform: uppercase; color: var(--thread); opacity: 0.85; }
 .hud-label { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
@@ -206,9 +206,9 @@ body {
   .hud-top { position: sticky; top: 0; gap: 14px; padding: 0 16px; z-index: 3; }
   .hud-race, .chip, .tagline, .hud-countdown .hud-label:first-child { display: none; }
   .brand, .brand > div { min-width: 0; }
-  .hud-top h1 { font-size: 19px; letter-spacing: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hud-top h1 { font-size: 19px; letter-spacing: 1px; }
   .brand { gap: 10px; }
-  .brand svg { width: 38px; height: 38px; }
+  .brand-logo { height: 34px !important; width: auto !important; }
   .hud-countdown b { font-size: 24px; }
   .sound-toggle span:last-child { display: none; }
   .game-body { display: flex; flex-direction: column; }
@@ -575,7 +575,7 @@ table.grid .when-time { font-weight: 500; font-size: 12px; color: var(--muted); 
 .game.intro .game-menu { animation: intro-left 0.7s 3.5s both; }
 .game.intro .panel { animation: intro-right 0.7s 3.6s both; }
 .game.intro .player-plate { animation: intro-fade 1s 3.9s both; }
-.game.intro .brand svg { animation: stamp 0.6s 4.1s both; }
+.game.intro .brand-logo { animation: stamp 0.6s 4.1s both; }
 @keyframes intro-down { from { opacity: 0; transform: translateY(-100%); } }
 @keyframes intro-left { from { opacity: 0; transform: translateX(-40px); } }
 @keyframes intro-right { from { opacity: 0; transform: translateX(40px); } }
