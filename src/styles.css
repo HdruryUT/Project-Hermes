@@ -211,7 +211,7 @@ body {
   .sound-toggle span:last-child { display: none; }
   .game-body { display: flex; flex-direction: column; }
   .game-menu {
-    flex-direction: row; padding: 10px 16px; gap: 4px; overflow-x: auto; scrollbar-width: none;
+    flex-direction: row; padding: 10px 16px 10px 0; gap: 4px; overflow-x: auto; scrollbar-width: none;
     overscroll-behavior-x: contain; /* no elastic pull-past-the-edge bounce at either end */
     position: sticky; top: calc(var(--hud-h) + 4px); z-index: 3; background: rgba(var(--bg-rgb), 0.88); border-bottom: 1px solid var(--line);
   }
@@ -220,6 +220,9 @@ body {
   .menu-item { width: auto; flex-shrink: 0; font-size: 14px; padding: 8px 12px; border-left: none; border-bottom: 2px solid transparent; }
   .menu-item:hover, .menu-item:focus-visible, .menu-item.active { padding-left: 12px; }
   .menu-item.active { border-bottom-color: var(--thread); }
+  /* The container's left padding is removed so the first (resting-scroll) tab's active
+     highlight can bleed to the true screen edge; restore the inset for its icon/text only. */
+  .menu-item:first-child { padding-left: 16px; }
   .stage { height: 58vh; min-height: 380px; }
   .player-plate { min-width: 0; }
   .player-name { font-size: 24px; letter-spacing: 1.5px; }
